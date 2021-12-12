@@ -1,0 +1,171 @@
+---
+title: "AppendixB - EDA"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(gridExtra)
+library(grid)
+library(knitr)
+```
+
+### EDA of NHANES data
+
+```{r}
+# Load merged dataset for the years 2007-2008 through 2017-2018
+load('./Data/masterDF.Rda')
+
+df <- df %>% mutate(RIAGENDR = as.factor(RIAGENDR),
+                    RIDRETH3 = as.factor(RIDRETH3),
+                    DMDEDUC2 = as.factor(DMDEDUC2),
+                    INDFMIN2 = as.factor(INDFMIN2),
+                    DRQSDIET = as.factor(DRQSDIET),
+                    DPQ020 = as.factor(DPQ020),
+                    DIQ010 = as.factor(DIQ010)) %>% 
+  mutate(Year = ifelse(origin.x == "DEMO_E.XPT", 2008,
+                       ifelse(origin.x == "DEMO_F.XPT", 2010,
+                       ifelse(origin.x == "DEMO_G.XPT", 2012,
+                       ifelse(origin.x == "DEMO_H.XPT", 2014,
+                       ifelse(origin.x == "DEMO_I.XPT", 2016, 2018)))))) %>%
+  filter(RIDAGEYR >=20)
+
+# Add categorical variable for UWCB; UWCB=NA if no information is available for any of 
+# the criteria
+df$UWCB <- NA
+
+for (i in 1:nrow(df)){
+  if (is.na(df$DPQ050[i]) & is.na(df$WHD080E[i]) &
+      is.na(df$WHD080J[i]) & is.na(df$WHD080K[i])){
+    df$UWCB[i] = NA
+  }
+  else if((!is.na(df$DPQ050[i]) & df$DPQ050[i] %in% c(2,3)) | (!is.na(df$WHD080E[i]) & df$WHD080E[i] == 14) |
+     (!is.na(df$WHD080J[i]) & df$WHD080J[i] == 32) | (!is.na(df$WHD080K[i]) & df$WHD080K[i] == 33)){
+    df$UWCB[i] = 1
+  } else{
+    df$UWCB[i] = 0
+  }
+}
+
+table(df$UWCB)
+sum(is.na(df$UWCB))
+
+# remove observations with NA outcome
+df <- df %>% drop_na(UWCB)
+
+# Recode outcome as factor
+df <- df %>% mutate(UWCB = as.factor(UWCB))
+
+df2 <- df %>% dplyr::select(UWCB, RIDAGEYR, RIAGENDR, DMDEDUC2, INDFMIN2, DRQSDIET,
+              DPQ020, DR1TKCAL, BMXBMI, RIDRETH3, DMDHHSIZ,
+              DR1TPROT,DR1TCARB,DR1TSUGR, DR1TTFAT, DR1TCAFF, DR1TALCO, DSDCOUNT, 
+              DIQ010,SLD012) %>% drop_na()
+
+df2 <- df2 %>% mutate(UCWBlab = ifelse(UWCB==1, "UWCB", "No UWCB"))
+```
+
+```{r, fig.width= 10, warning=FALSE}
+#Special Diet
+options(scipen = 100)
+df %>% summarize(`weight loss diet` = mean(df$DRQSDT1, na.rm=TRUE)/1,
+                 `low fat diet` = mean(df$DRQSDT2, na.rm=TRUE)/2,
+                 `low salt diet` = mean(df$DRQSDT3, na.rm=TRUE)/3,
+                 `sugar free diet` = mean(df$DRQSDT4, na.rm=TRUE)/4,
+                 `low fiber diet` = mean(df$DRQSDT5, na.rm=TRUE)/5,
+                 `high fiber diet` = mean(df$DRQSDT6, na.rm=TRUE)/6,
+                 `diabetic diet` = mean(df$DRQSDT7, na.rm=TRUE)/7,
+                 `weight gain diet` = mean(df$DRQSDT8, na.rm=TRUE)/8,
+                 `low carbs diet` = mean(df$DRQSDT9, na.rm=TRUE)/9,
+                 `high protein diet` = mean(df$DRQSDT10, na.rm=TRUE)/10,
+                 `other special diet` = mean(df$DRQSDT91, na.rm=TRUE)/91) %>%
+      gather("Diet", "Prevalence")
+
+#Nutrition Intake
+protein <- df %>% 
+              ggplot(aes(y = DR1TPROT)) +
+              geom_boxplot(fill="grey") + 
+              theme_minimal() + ylab("Protein intake (gm)")
+carbs <- df %>% 
+              ggplot(aes(y = DR1TCARB)) +
+              geom_boxplot(fill="grey") + 
+              theme_minimal() + ylab("Carbohydrate intake (gm)")
+sugars <- df %>% 
+              ggplot(aes(y = DR1TSUGR)) +
+              geom_boxplot(fill="grey") + 
+              theme_minimal() + ylab("Sugars intake (gm)")
+fiber <- df %>% 
+              ggplot(aes(y = DR1TFIBE)) +
+              geom_boxplot(fill="grey") + 
+              theme_minimal() + ylab("Dietary fiber intake (gm)")
+fat <- df %>% 
+              ggplot(aes(y = DR1TTFAT)) +
+              geom_boxplot(fill="grey") + 
+              theme_minimal() + ylab("Fat intake (gm)")
+caffeine <- df %>% 
+              ggplot(aes(y = DR1TCAFF)) +
+              geom_boxplot(fill="grey") + 
+              theme_minimal() + ylab("Caffeine intake (mg)")
+alcohol <- df %>% 
+              ggplot(aes(y = DR1TALCO)) +
+              geom_boxplot(fill="grey") + 
+              theme_minimal() + ylab("Alcohol intake (gm)")
+water <- df %>% 
+              ggplot(aes(y = DR1_320Z)) +
+              geom_boxplot(fill="grey") + 
+              theme_minimal() + ylab("Water intake (gm)")
+
+grid.arrange(protein, carbs, sugars, fiber, fat, caffeine, alcohol, water, ncol = 4)
+
+```
+
+
+### Assessing missingness for variables of interest
+
+```{r}
+# Assess missingness for covariates of interest
+features = c("RIDAGEYR", "RIAGENDR", "DMDEDUC2", "INDFMIN2", "DRQSDIET",
+              "DPQ020", "DR1TKCAL", "BMXBMI", "RIDRETH3",
+             "DMDHHSIZ","DR1TPROT","DR1TCARB","DR1TSUGR",
+             "DR1TTFAT", "DR1TCAFF", "DR1TALCO",  "DSDCOUNT", "DIQ010","SLD012")
+
+tab <- as.data.frame(matrix(nrow=length(features), ncol=2))
+tab$V1 <- c("Age", "Gender", "Education", "Income", "Special diet", "Depression",
+                         "Energy intake (kcal)", "BMI",
+                         "Ethnicity", "Household size", "Protein intake", 
+                         "Carbohydrate intake", "Sugar intake", "Fat intake",
+                         "Caffeine intake", "Alcohol intake", "Dietary supplements",
+                         "Diabetes", "Sleep")
+
+colnames(tab) <- cbind("Variable", "Missingness [%]")
+
+for (x in 1:length(features)){
+  tab$`Missingness [%]`[x] <- sum(is.na(df[features[x]]))/nrow(df)
+}
+tab <- tab %>% arrange(desc(`Missingness [%]`))
+
+knitr::kable(tab)
+```
+
+### EDA plots
+
+```{r}
+#education,fewer participants with college graduate or above had UWCBs
+df2 %>% ggplot(aes(x = UCWBlab,fill = DMDEDUC2)) + 
+  geom_bar(position = "fill") +
+  labs(x="",y = "Proportion") + 
+  scale_fill_discrete(name="Highest education level",
+                      breaks=c("1", "2","3","4","5","77","99"),
+                      labels=c("<9th grade","9-11th grade","high school graduate","college/AA degree","college graduate or above","Refused","Don't know"))
+#total family income, fewer participants with high income had UWCBs
+df2 %>% ggplot(aes(x = UCWBlab,fill = INDFMIN2)) + 
+  geom_bar(position = "fill") +
+  labs(x="",y = "Proportion") + 
+  scale_fill_discrete(name="Total family income",
+                      breaks=c("1", "2","3","4","5","6","7","8","9","10","12","13","14","15","77","99"),
+                      labels=c("0-4999","5000-9999","10000-14999","15000-19999","20000-24999","25000-34999","35000-44999","45000-54999","55000-64999","65000-74999", ">20000","<20000","75000-99999",">100000", "Refused","Don't know"))
+
+```
+
