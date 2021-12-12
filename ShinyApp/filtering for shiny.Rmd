@@ -13,7 +13,7 @@ library(tidyverse)
 library(shiny)
 #second we load in the data
 
-setwd("~/Desktop/CBQG/Fall 2021/Data Science/project")
+#setwd("~/Desktop/CBQG/Fall 2021/Data Science/project")
 nhanes <- load("masterDF.Rda")
 head(nhanes)
 head(df)
