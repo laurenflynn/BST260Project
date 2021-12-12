@@ -1,0 +1,882 @@
+---
+title: "Predicting Unhealthy Weight Control Behaviors in the US Population"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(splitstackshape)
+library(caret)
+library(MASS)
+library(pROC)
+library(rpart)
+library(randomForest)
+library(knitr)
+library(e1071)
+library(ROSE)
+library(haven)
+library(Hmisc)
+library(ggplot2)
+library(ggrepel)
+library(gridExtra)
+library(rvest)
+library(dplyr)
+library(lubridate)
+library(zoo)
+library(maps)
+library(naniar)
+library(RColorBrewer)
+library(forcats)
+library(glmnet)
+library(nnet)
+library(survey)
+library(ggpubr)
+```
+
+#### Anna Lai, Kayla Lin, Lauren Flynn and Carolin Schulte
+
+### Overview and Motivation
+
+Unhealthy weight control behaviors (UWCB) including extreme restriction of energy intake, vomiting or laxative use are commonly observed among among adolescents and young adults ([Patton et al., 2006](https://doi.org/10.1111/j.1469-7610.1997.tb01514.x), [Nagata et al., 2018](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6152843/)). Consequences of UWCBs include psychological disorders like anxiety and depression ([Lee and Lee, 2015](https://link.springer.com/article/10.1186/s12889-016-2703-z), [Patton et al., 2006](https://doi.org/10.1111/j.1469-7610.1997.tb01514.x)), long-term increases in BMI ([Neumark-Sztainer et al., 2012](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3245517/)), as well as clinical eating disorders such as anorexia nervosa and bulimia nervosa ([Neumark-Sztainer et al., 2006](https://www.sciencedirect.com/science/article/pii/S0002822306000046?casa_token=b0eHxKUX43cAAAAA:viIns75KTEw05CaXBa9TmYIkFQsZrGIuRIZvcLQ1mo5iz2LH3_4umpj5vg8PRi5nRLBINWxPLf8)). Due to the high prevalence and numerous negative long-term implications of UWCBs, identification of risk factors is of major importance to facilitate early detection of UWCBs and design targeted intervention strategies. 
+
+Various studies have investigated risk factors for the development of UWCBs, particularly in adolescents and have identified factors such as gender, socioeconomic status and depression to be associated with the occurrence of UWCBs ([Forman-Hoffman, 2004](https://doi.org/10.1016/j.eatbeh.2004.04.003), [Tuffa et al., 2020](https://onlinelibrary.wiley.com/doi/full/10.1002/eat.23227)). While it is increasingly recognised that both males and females engage in UWCBs ([Forman-Hoffman, 2004](https://doi.org/10.1016/j.eatbeh.2004.04.003)) and that UWCBs are prevalent in populations of various ethnicities ([Gitau et al., 2014](https://doi.org/10.1371/journal.pone.0109709), [Tuffa et al., 2020](https://doi.org/10.1002/eat.23227)), many studies that have been published to date focus on UWCBs in women and adolescents/young adults, which may cause oversight of risk factors affecting different demographics.    
+
+In this study, we analyse data collected as part of the National Health and Nutrition Examination Survey (NHANES). Our goal is to develop machine learning models to predict UWCBs in adults in the US population. Since most studies of the risk factors for UWCBs have so far been performed among adolescents or young adults, we aim to expand the current knwoledge about predictors of UWCBs by using the comprehensive data collected as part of the National Health and Nutrition Examination Survey (NHANES) to identify predictors of UWCBs across the US adult population. Identification of the most predictive factors for UWCBs in our models will enable us to distinguish general risk factors for UWCBs, which could inform improved screening strategies for and thus early detection and treatment of UWCBs.
+
+### Related Work
+This work is inspired by various studies using machine learning to predict medical conditions such as diabetes ([Vangeepuram et al., 2021](https://www.nature.com/articles/s41598-021-90406-0)), human papilloma virus-related cancer ([Tewari et al., 2021](https://doi.org/10.1371/journal.pcbi.1009289)), or depression ([Oh et al., 2019](https://doi.org/10.1016/j.jad.2019.06.034)) based on the NHANES data.
+The idea to focus on UWCBs as the outcome rather than disordered eating behaviors came from a study by Tran and colleagues ([Tran et al., 2019](https://jeatdisord.biomedcentral.com/articles/10.1186/s40337-019-0244-4#Sec3)), who used multivariate logistic regression to evaluate the association between use of dating apps and UWCBs.
+The selection of potential covariates was further based on studies in which the association of demographic, socioeconomic and medical factors with UWCBs was investigated. For example, it was shown in ([Tuffa et al., 2020](https://doi.org/10.1002/eat.23227)) that there is a significant association between self-perceived weight, actual weight, depression, high socioeconomic status and UWCBs among young female Ethiopians. In a cohort study among adolescents in the US, it was found that mental health and social environment were risk factors for developing UWCBs ([Nagata et al., 2018](https://pubmed.ncbi.nlm.nih.gov/30236999/)). The authors also found that risk factors differed based on gender and weight of the individuals.
+
+### Initial Questions
+Initially, our aim was to predict disordered eating behavior based on the NHANES data since eating disorders, such as anorexia nervosa and bulimia nervosa, are major public health problems, globally causing the loss of approximately 3.3 million healthy life years every year ([van Hoeken and Hoek, 2020](https://doi.org/10.1097/YCO.0000000000000641)) and having an estimated economic cost of $64.7 billion per year in the US ([Streatfeild et al., 2021](https://doi.org/10.1002/eat.23486)). However, both a review of the literature and discussion with Dr. Bryn Austin (HSPH) revealed that it is difficult to determine whether an individual has an eating disorder based on the information collected as part of NHANES. Eating disorders manifest with a large spectrum of symptoms, and exclusive focus on a superficial metric such as BMI would likely lead to attaching incorrect labels to many NHANES participants. We therefore decided to instead focus on UWCBs, which encompass behaviors such as skipping meals, laxative use and vomiting to lose weight ([López-Guimerà et al., 2013](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3756811/)).
+
+### Data
+Visualizations of worldwide mortality due to eating disorders was performed using data adapted from the [World Health Organization (WHO)](https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Fwww.who.int%2Fhealthinfo%2Fglobal_burden_disease%2FGHE_Deaths_2012_country.xls%3Fua%3D1&wdOrigin=BROWSELINK). The original data was released by the Department of Health Statistics and Information Systems in 2014 and included estimates for deaths for 172 countries by various causes in 2012. Since the original data was stored in a view-only Excel sheet, we extracted the required information out of the original data and formed a new data set for analysis. \
+All main analyses were performed using publicly available data from the National Health and Nutrition Examination Survey ([NHANES](https://www.cdc.gov/nchs/nhanes/about_nhanes.htm)). NHANES is a survey by the National Center for Health Statistics (NCHS), which is part of the Centers for Disease Control and Prevention (CDC), and collects comprehensive data on health and nutrition status through both interviews and physical examinations, as well as providing demographic and socioeconomic information about the survey participants.
+The data were downloaded from the [CDC website](https://www.cdc.gov/nchs/nhanes/about_nhanes.htm) and variables of interest were selected from the demographic, dietary, examination and questionnaire data. Values for missing data were recoded if necessary in order to obtain uniform missingness indicators for all analyses. R code for all data cleaning and merging steps is provided in **Appendix A**.
+In order to obtain a sufficient number of observations to train machine learning models in this study, NHANES data from 2007-2008 through 2017-2018 were combined for all analyses. Since access to physical examination data for adolescents is restricted, our analysis was limited to those survey participants that were at least 20 years old. It should be noted that the NHANES study uses a complex survey design, where certain groups are oversampled. The weight associated with each observation is not taken into account in our analysis, and analysis results could be different if weights are accounted for (as pointed out in the **Discussion**).
+
+### Exploratory Analysis
+
+#### Global mortality due to eating disorders
+Due to our initial aim to investigate risk factors for developing eating disorders, we explored global mortality because of eating disorders using data provided by the WHO.
+
+```{r, warning=F, message=F}
+#loading data adapted from WHO 
+WHO_mortality <- as.data.frame(read_csv("./Data/GlobalMortalityData2014.csv")) %>% 
+                      dplyr::select(c("Country", "Death by Eating Disorders", "Total Population"))
+head(WHO_mortality)
+
+#Loading World Map Data
+world_map = map_data("world")
+#world_map %>% select(region) %>% arrange(region) %>% distinct() 
+#The line above was used to identify different names for countries in WHO and map data
+```
+
+```{r}
+# Key for discrepant country names in WHO and world map data
+country_key = data.frame(rbind(c("Bolivia", "Bolivia (Plurinational State of)"), 
+                               c("Brunei", "Brunei Darussalam"), 
+                               c("Ivory Coast", "Côte d'Ivoire"), 
+                               c("North Korea", 
+                                 "Democratic People's Republic of Korea"), 
+                               c("Iran", "Iran (Islamic Republic of)"), 
+                               c("Laos", "Lao People's Democratic Republic"), 
+                               c("South Korea", "Republic of Korea"), 
+                               c("Moldova", "Republic of Moldova"), 
+                               c("Russia", "Russian Federation"), 
+                               c("Syria", "Syrian Arab Republic"),
+                               c("North Macedonia",
+                                 "The former Yugoslav Republic of Macedonia"), 
+                               c("Trinidad", "Trinidad and Tobago"), 
+                               c("UK", "United Kingdom"), 
+                               c("Tanzania", "United Republic of Tanzania"), 
+                               c("USA", "United States of America"), 
+                               c("Venezuela", 
+                                 "Venezuela (Bolivarian Republic of)"),
+                               c("Vietnam", "Viet Nam")))
+names(country_key) = c("map", "WHO")
+
+# Create named vector for recoding country names
+recode_WHO <- country_key$map; names(recode_WHO) = country_key$WHO
+
+# Recode country names in WHO data to match with map data
+WHO_mortality <- WHO_mortality %>%
+  mutate(Country = recode(Country, !!!recode_WHO)) %>%
+  arrange(Country)
+
+# Joining WHO data with the map data
+mortality_map <- world_map %>% rename(Country = region) %>%
+  left_join(WHO_mortality) %>%
+  rename(Deaths = "Death by Eating Disorders") %>%
+  rename(Population = "Total Population") %>%
+  filter(!Country %in% c("Antarctica", "Greenland"))
+```
+
+
+```{r, fig.width=9}
+# Heatmap of Total Eating Disorder Deaths in 2012
+mortality_map %>% ggplot(aes(x = long, y = lat, group = group, fill = Deaths)) +
+                  geom_polygon(color = "black") +
+                  scale_fill_gradientn(colors = brewer.pal(9, "Purples"), 
+                                       trans = "sqrt", name = "Deaths from eating disorders \n (square root scale)", breaks = c(0,100,600,1200)) +
+                  coord_fixed(1.3) +
+                  theme(panel.grid.major = element_blank(), 
+                     panel.background = element_blank(),
+                     axis.title = element_blank(), 
+                     axis.text = element_blank(),
+                     axis.ticks = element_blank()) +
+                  theme_minimal() +
+                  ggtitle("WHO estimated number of deaths \ndue to eating disorders in 2012") + 
+                  theme(plot.title = element_text(hjust = 0.5)) +
+                  ylab("") + xlab("")
+```
+
+As shown in the heat map above, thousands of people die from eating disorders every year, and many suffer from chronic health issues related to eating disorders. However, this particular map could be somewhat misleading since China, USA, and Brazil have very large populations and would thus be expected to have the highest absolute number of deaths related to eating disorders. Hence, another heat map was created to show the number of estimated deaths due to eating disorders per 1 million people. This would help us better understand the severity of eating disorders across different countries.
+
+```{r, fig.width=9}
+mortality_map <- mortality_map %>% dplyr::mutate(Death_per_Million = Deaths/(Population/1000000))
+
+mortality_map %>% ggplot(aes(x = long, y = lat, group = group, fill = Death_per_Million)) +
+                  geom_polygon(color = "black") +
+                  scale_fill_gradientn(colors = brewer.pal(9, "Reds"), trans = "sqrt", name = "Deaths from eating disorders \n per 1 million (square root scale)") +
+                  coord_fixed(1.3) +
+                  theme(panel.grid.major = element_blank(), 
+                     panel.background = element_blank(),
+                     axis.title = element_blank(), 
+                     axis.text = element_blank(),
+                     axis.ticks = element_blank()) +
+                  theme_minimal() +
+                  ggtitle("Estimated number of deaths per million \ncaused by eating disorders in 2012") + 
+                  theme(plot.title = element_text(hjust = 0.5)) +
+                  ylab("") + xlab("")
+```
+
+As shown in the map above, deaths caused by eating disorders seem to be more prevalent in Europe, Americas, and parts of Asia. One of the possible reasons  why Africa does not suffer severely from eating disorder-related mortality is that there might be under-reporting due to lack of access to healthcare facilities. Another reason why individuals in Europe, Americas, and Asia might suffer more from eating disorders is the strong presence of social pressure on weight control. \
+
+#### Exploratory analysis of NHANES data
+Due to the difficulty of detecting eating disorders based on available data as described in **Initial Questions**, we next focused on risk factors of UWCBs, which commonly precede eating disorders. To this end, we used data from NHANES, which contains a  variety of information on demographics, dietary intake, consumer behavior, physical and mental health, weight history, and drug use. We would like to examine individual-level data to deepen our knowledge of risk factors and trends associated with UWCBs. We limited our analysis to those individuals who are at least 20 years old, since not all medical information collected as part of NHANES is available for adolescents.
+
+
+```{r}
+# Load merged dataset for the years 2007-2008 through 2017-2018
+load('./Data/masterDF.Rda')
+
+df <- df %>% mutate(RIAGENDR = as.factor(RIAGENDR),
+                    RIDRETH3 = as.factor(RIDRETH3),
+                    DMDEDUC2 = as.factor(DMDEDUC2),
+                    INDFMIN2 = as.factor(INDFMIN2),
+                    DRQSDIET = as.factor(DRQSDIET),
+                    DPQ020 = as.factor(DPQ020),
+                    DIQ010 = as.factor(DIQ010)) %>% 
+  mutate(Year = ifelse(origin.x == "DEMO_E.XPT", 2008,
+                       ifelse(origin.x == "DEMO_F.XPT", 2010,
+                       ifelse(origin.x == "DEMO_G.XPT", 2012,
+                       ifelse(origin.x == "DEMO_H.XPT", 2014,
+                       ifelse(origin.x == "DEMO_I.XPT", 2016, 2018)))))) %>%
+  filter(RIDAGEYR >=20)
+```
+
+```{r, fig.height=6, fig.width=6, fig.align = 'center'}
+# Age
+summary(df$RIDAGEYR)
+ageplot <- df %>% ggplot(aes(x = RIDAGEYR)) +
+  geom_bar(fill="grey") +
+  theme_minimal() + xlab("Age (years)") + ylab("Count") +
+  ggtitle("Age")
+
+# Race
+raceplot <- df %>% ggplot(aes(x = RIDRETH3)) +
+  geom_bar(fill="grey") + 
+  theme_minimal() + xlab("") + ylab("Count") +
+  scale_x_discrete(labels=c("1" = "Mexican-American", "2" = "Other Hispanic",
+                            "3"="Non-Hispanic White","4"="Non-Hispanic Black",
+                            "5"="Other race", "6"="Non-Hispanic Asian",
+                            "7"="Other race \nincluding multi-racial")) +
+  ggtitle("Race") +
+  theme(axis.text.x=element_text(angle=45, hjust=1))
+
+# Gender
+summary(df$RIAGENDR)
+genderplot <- df %>% group_by(RIAGENDR) %>% 
+  ggplot(aes(x = RIAGENDR, y = RIDAGEYR)) +
+  geom_boxplot(fill="grey") +
+  scale_x_discrete(labels=c("1" = "Male", "2" = "Female")) +
+  theme_minimal() + xlab("") + ylab("Age") +
+  ggtitle("Gender")
+
+# Education
+summary(df$DMDEDUC2)
+
+educplot <- df %>% replace_with_na(replace = list(DMDEDUC2 = c("77", "99"))) %>%
+  ggplot(aes(x = DMDEDUC2)) +
+  geom_bar(fill = "grey") + 
+  theme_minimal() + xlab("") +
+  scale_x_discrete(labels=c("1" = "Less than 9th grade", "2" = "9-11th grade",
+                            "3"="High school graduate","4"="College degree",
+                            "5"="College graduate \nor above")) +
+  ylab("Count") +
+  ggtitle("Highest level of education") +
+  theme(axis.text.x=element_text(angle=45, hjust=1))
+
+ggarrange(ageplot, raceplot, genderplot, educplot, nrow=2, ncol=2)
+```
+
+The mean age in the combined data for 2007-2018 was 49.9 years. In fact, there is a slight downward bias for the mean since everyone who is 80 years or older was coded as 80. However, the median value of 50 is a true representation of the underlying data. Generally speaking, we see an equal distribution across age. For race and ethnicity, we see that there are mostly Non-Hispanic White (3) and Non-Hispanic Black (4) individuals in the cohort, which is an accurate representation of the US population. Race category 5 was used to represent other races before 2010, which included Asians. After 2010, Asians were categorized as 6, and 7 was used to represent other minorities, including multiracial individuals. Finally for gender, we have an approximately equal number of males and females, while age is evenly distributed across both genders as shown in the boxplot above. It can be seen that among the participants aged 20 or above, most individuals received high school (3), college (4), or graduate (5) degrees.
+
+```{r, fig.height=4, fig.width=10, fig.align = 'center'}
+#Family income and poverty
+incomeplot <- df %>% replace_with_na(replace = list(INDFMIN2 = c("77", "99"))) %>%
+  mutate(INDFMIN2 = recode(INDFMIN2, "12"="over 20K", "13"="under 20K")) %>%
+  mutate(INDFMIN2 = fct_relevel(INDFMIN2, "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "14", "15","under 20K", "over 20K")) %>%
+  ggplot(aes(x = INDFMIN2)) +
+  geom_bar(fill = "grey") + 
+  theme_minimal() + xlab("") +
+  ylab("Count") +
+  scale_x_discrete(labels=c("1" = "$ 0 to $ 4,999", "2" = "$ 5,000 to $ 9,999",
+                            "3"="$10,000 to $14,999","4"="$15,000 to $19,999",
+                            "5"="$20,000 to $24,999",
+                            "6" = "$25,000 to $34,999", 
+                            "7" = "$35,000 to $44,999",
+                            "8"="$45,000 to $54,999","9"="$55,000 to $64,999",
+                            "10"="$65,000 to $74,999", 
+                            "14"="$75,000 to $99,999",
+                            "15"="$100,000 and over")) +
+  theme(axis.text.x=element_text(angle=45, hjust=1)) +
+  ggtitle("Annual family income")
+
+hhplot <- df %>% subset(!is.na(INDFMPIR)) %>%
+  ggplot(aes(x=as.factor(DMDFMSIZ), y=INDFMPIR)) + 
+  geom_boxplot(fill = "grey") +
+  theme_minimal() + 
+  xlab("Number of people in household") + 
+  ylab("Ratio of family income to poverty") +
+  ggtitle("Number of people in subject's household")
+
+ggarrange(incomeplot, hhplot, ncol=2)
+```
+
+As shown in the bar plot above, we see an approximately normal distribution of annual household income, with the exception of individuals from high income families (categories 14 and 15, which represent annual income of $75K or above), which was the category with the highest number of observations in the NHANES data. The boxplot with number of people in subject's household on the x-axis and ratio of family income to poverty on the y-axis was also plotted to better understand the relationship between family size and family income.
+
+```{r}
+# Summary of BMI
+BMI_df <- df %>% filter(RIDAGEYR >=20) %>% dplyr::select(BMXBMI)
+summary(BMI_df)
+
+sum(BMI_df > 30, na.rm=TRUE)/nrow(BMI_df)
+sum(BMI_df < 18.5, na.rm=TRUE)/nrow(BMI_df)
+```
+
+The mean BMI for our study population was 29.23 kg/m$^2$. BMI of 30 kg/m$^2$ or above usually indicates obesity, and 36.1% of our cohort has BMI larger than 30 kg/m$^2$. This is consistent with [data from the CDC](https://www.cdc.gov/obesity/data/adult.html) indicating that the age-adjusted prevalence of obesity in adults is 42.4%. Only 1.5% of our study population had a BMI lower than 18.5 kg/m$^2$, which is an indication for being underweight.\
+Further plots showing nutrient intakes and special diets of the study participants are shown in **Appendix B**. The most common type of diet participants followed was weight-loss diet, which was observed in approximately 5.6% of the study population 20 years or older.
+
+#### Trends in outcome data
+Following a review of published studies, a subject was categorized as showing UWCBs if any one of the following applied: 
+
+*   Skipped meals to lose weight (`WHD080E`)
+*   Took non-prescription supplements to lose weight (`WHD080J`)
+*   Took laxatives or vomited to lose weight (`WHD080K`)
+*   Poor appetite or overeating more than half the days or nearly every day (`DPQ050`)
+
+While the last point is not a UWCB per se, a poor regulation of hunger signals is commonly the consequence of UWCB ([Yang et al., 2021](https://www.sciencedirect.com/science/article/abs/pii/S1550728921000344#!), [Hayes et al., 2018](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6098715/#R70)), and was therefore considered an indicator for engaging in UWCBs. We explored trends in these outcomes over time.
+
+```{r, fig.height=4, fig.align = 'center'}
+# Potential Outcome 1: Skipped meals to lose weight
+outcome1 <- df %>% drop_na(WHD080E) %>%
+            mutate(WHD080E = as.factor(WHD080E)) %>%
+            group_by(Year) %>% 
+            dplyr::summarize(outcome = "Skipped meals", 
+                             count = sum(WHD080E == "14"), proportion = count/n())
+
+# Potential Outcome 2: Took non-prescription supplements to lose weight
+outcome2 <- df %>% drop_na(WHD080J) %>%
+            mutate(WHD080J = as.factor(WHD080J)) %>%
+            group_by(Year) %>% 
+            dplyr::summarize(outcome = "Non-prescription supplements", 
+                             count = sum(WHD080J == "32"), proportion = count/n())
+
+# Potential Outcome 3: Took laxatives or vomited to lose weight
+outcome3 <- df %>% drop_na(WHD080K) %>%
+            mutate(WHD080K = as.factor(WHD080K)) %>%
+            group_by(Year) %>% 
+            dplyr::summarize(outcome = "Laxative use or vomiting", 
+                             count = sum(WHD080K == "33"), proportion = count/n())
+
+# Potential Outcome 4: Poor appetite or overeating more than half the days or nearly every day
+outcome4 <- df %>% drop_na(DPQ050) %>%
+            mutate(DPQ050 = as.factor(DPQ050)) %>%
+            group_by(Year) %>% 
+            dplyr::summarize(outcome = "Poor appetite/overeating", 
+                             count = sum(DPQ050 %in% c("2","3")), proportion = count/n())
+
+# Examining potential outcomes in plot
+outcomes <- rbind(outcome1, outcome2, outcome3, outcome4)
+
+outcomes %>% ggplot(aes(x = Year, y = proportion, color = as.factor(outcome))) +
+  geom_line(size=1) +
+  scale_x_continuous(breaks = c(2008, 2010, 2012, 2014, 2016, 2018)) +
+  scale_y_continuous(trans = "sqrt", breaks = c(0.01, 0.05, 0.1, 0.25)) +
+  scale_color_discrete(name = "Potential outcomes") +
+  theme_minimal() + 
+  ylab("Prevalence of outcomes (sqrt scale)") + xlab("Year") +
+  ggtitle("Trends in UWCBs")
+
+```
+
+It can be seen that poor appetite or overeating were the most commonly observed UWCB indicator in our study population until 2014-2015, when skipping meals to lose weight became the most common UWCB. In addition, three was a slight increase in prevalence of laxative use/vomiting and over the years, while the use of non-prescription weight-loss supplements did not show substantial changes over the study period
+
+#### Outcome for regression and machine learning
+To fit machine learning models, outcome labels were assigned to all observations. A subject was categorized as showing UWCBs if any of the criteria described above applied. 
+This categorization resulted in 5,621 subjects being classified as having UWCB, and therefore a low prevalence (16.4%) of the outcome in the dataset.
+410 subjects for whom information for all of these factors was missing were excluded from the analysis.
+
+```{r}
+# Add categorical variable for UWCB; UWCB=NA if no information is available for any of the criteria
+
+df$UWCB <- NA
+
+for (i in 1:nrow(df)){
+  if (is.na(df$DPQ050[i]) & is.na(df$WHD080E[i]) &
+      is.na(df$WHD080J[i]) & is.na(df$WHD080K[i])){
+    df$UWCB[i] = NA
+  }
+  else if((!is.na(df$DPQ050[i]) & df$DPQ050[i] %in% c(2,3)) | (!is.na(df$WHD080E[i]) & df$WHD080E[i] == 14) |
+     (!is.na(df$WHD080J[i]) & df$WHD080J[i] == 32) | (!is.na(df$WHD080K[i]) & df$WHD080K[i] == 33)){
+    df$UWCB[i] = 1
+  } else{
+    df$UWCB[i] = 0
+  }
+}
+
+table(df$UWCB)
+
+# Remove observations with NA outcome
+df <- df %>% drop_na(UWCB)
+
+# Recode outcome as factor
+df <- df %>% mutate(UWCB = as.factor(UWCB))
+```
+
+#### Features for regression and machine learning
+
+Features of interest were selected based on a review of the literature and their missingness in the dataset. In particular, variables of interest included: 
+
+*   Age (`RIDAGEYR`)
+*   Gender (`RIAGENDR`)
+*   Ethnicity (`RIDRETH3`)
+*   Highest education level (`DMDEDUC2`)
+*   Total family income (`INDFMIN2`)
+*   Number of people in the household (`DMDHHSIZ`)
+*   Following a special diet (`DRQSDIET`)
+*   BMI (`BMXBMI`)
+*   Feeling depressed (`DPQ020`)
+*   Energy intake (`DR1TKCAL`)
+*   Protein intake (`DR1TPROT`)
+*   Carbohydrate intake (`DR1TCARB`)
+*   Fat intake (`DR1TTFAT`)
+*   Sugar intake (`DR1TSUGR`)
+*   Caffeine intake (`DR1TCAFF`)
+*   Alcohol cosumption (`DR1TALCO`)
+*   Number of dietary supplements taken (`DSDCOUNT`)
+*   Diabetes (`DIQ010`)
+*   Hours of sleep (`SLD012`)
+
+For all of these features, missingness was assessed to determine if exclusion of observations with missing data would cause a substantial reduction in the number of observations. All variables had a missingness of less than 15% (**Appendix B**) and observations with missing data for these covariates were therefore excluded from the analysis. This led to the removal of 18.2% of the observations, with 28,123 observations remaining.
+We continued to perform exploratory analysis of the selected features in the NHANES data.
+
+```{r}
+# Select relevant covariates
+df2 <- df %>% dplyr::select(UWCB, RIDAGEYR, RIAGENDR, DMDEDUC2, INDFMIN2, DRQSDIET,
+              DPQ020, DR1TKCAL, BMXBMI, RIDRETH3, DMDHHSIZ,
+              DR1TPROT,DR1TCARB,DR1TSUGR, DR1TTFAT, DR1TCAFF, DR1TALCO, DSDCOUNT, 
+              DIQ010,SLD012) %>% drop_na()
+
+# Store data for regression and ML
+dat <- df2
+
+print(paste0("Number of observations with missing data: ",nrow(df) - nrow(df2)))
+print(paste0("Percent of data removed: ", round((nrow(df) - nrow(df2))/nrow(df),4)))
+```
+
+
+```{r, fig.height=5, fig.width=7, fig.align = 'center'}
+# Exploratory Analysis (prevalence of UWCBs among populations)
+# Continuous variables
+# Age, participants with UWCBs were younger
+
+df2 <- df2 %>% mutate(UCWBlab = ifelse(UWCB==1, "UWCB", "No UWCB"))
+
+plot1 <- df2 %>% ggplot(aes(x = UCWBlab, y = RIDAGEYR, fill=UWCB)) + 
+  geom_boxplot() +
+  labs(x="",y = "Age") +
+  guides(fill="none") +
+  ggtitle("Age and UWCBs")
+
+# Categorical variables
+# Gender, more female had UWCBs
+plot2 <- df2 %>% ggplot(aes(x = UCWBlab, fill = RIAGENDR)) + 
+  geom_bar(position = "fill") +
+  labs(x="",y = "Proportion") + 
+  guides(fill=guide_legend(title=NULL)) + 
+  scale_fill_discrete(name="Experimental\nCondition",
+                      breaks=c("1", "2"),
+                      labels=c("Male", "Female")) +
+  ggtitle("Gender and UWCBs")
+
+
+# BMI, participants with UWCBs had higher BMI
+plot3 <- df2 %>% ggplot(aes(x = UCWBlab, y = BMXBMI, fill=UWCB)) + 
+  geom_boxplot() +
+  labs(x="", y = "BMI") +
+  guides(fill="none") +
+  ggtitle("BMI and UWCBs")
+
+
+ggarrange(plot1, plot2, 
+          ncol =2, nrow = 1)
+```
+
+```{r}
+plot3
+```
+
+
+```{r, fig.width=5, fig.height = 8, fig.align = 'center'}
+# Ethnicity,fewer white and asian, more black had UWCBs
+plot4 <- df2 %>% ggplot(aes(x = UCWBlab,fill = RIDRETH3)) + 
+  geom_bar(position = "fill") +
+  labs(x="",y = "Proportion") + 
+  guides(fill=guide_legend(title=NULL)) + 
+  scale_fill_discrete(name="Experimental\nCondition",
+                      breaks=c("1", "2","3","4","5","6","7"),
+                      labels=c("Mexican American","Other Hispanic","Non-Hispanic White","Non-Hispanic Black","Other Race - Including Multi-Racial","Non-Hispanic Asian","Other")) +
+  ggtitle("Race and UWCBs")
+
+# Categorical BMI,fewer underweight and more obese participants had UWCBs
+dfbmi <- df2 %>% mutate (BMI_c = as.factor(ifelse(BMXBMI<18.5,1,
+                                        ifelse(BMXBMI<25,2,
+                                        ifelse(BMXBMI<30,3,4))))
+)
+
+table(dfbmi$BMI_c)
+
+plot5 <- dfbmi %>% ggplot(aes(x = UCWBlab, fill = BMI_c)) + 
+  geom_bar(position = "fill") +
+  labs(x="",y = "Proportion") + 
+  guides(fill=guide_legend(title=NULL)) + 
+  scale_fill_discrete(name="Experimental\nCondition",
+                      breaks=c("1", "2","3","4"),
+                      labels=c("Underweight", "Healthy","Overweight","Obese")) +
+  ggtitle("BMI and UWCBs")
+
+
+ggarrange(plot4, plot5,
+          ncol =1, nrow = 2)
+```
+
+A common notion exists that UWCBs are lifestyle choices and are more prevalent among young, white, upper-class women and wealthy people. Thus, previous studies on UWCBs were conducted mainly in white women and adolescents. If incorrect, this common notion could potentially cause oversight of UWCBs in males and older adults from other ethnic groups and lower socioeconomic status, thus exacerbating inequalities in access to treatment opportunities. Therefore, we assessed the prevalence of UWCBs across different groups. The plots above show the associations of UWCBs with age, gender, BMI, race, education, and total family income. In brief, compared to individuals without UWCBs, participants with UWCBs were more likely to be younger, female, obese, and non-Hispanic black, did not have a college education, and had lower total family income. Our findings were partly different from the aforementioned common notion, suggesting that obese and non-Hispanic black populations with lower education and income levels may have a higher risk of UWCBs. Therefore, more studies and medical resources are warranted for these populations. These findings also provided preliminary insights into predictive factors for UWCBs.
+
+
+### Final Analysis
+
+#### Shiny App
+To create an interactive visualization tool for trends in UWCB-related factors, we created a Shiny App visualizing some of the NHANES data.
+The first tab labeled “Dietary supplements across ages” shows histograms for the number of dietary supplements used depending on age. In general, there is a trend for older individuals to take more dietary supplements. 
+
+In the second tab labeled “Income and body measures”, there is a plot which on the x-axis has the ratio of family income to the poverty line (where any families making more than five times the poverty line are counted as five times the poverty line). One can select which body measure should be displayed on the y-axis out of the following list: BMI (kg/m$^2$), weight (kg), waist circumference (cm), and 60 second pulse. The information is stratified between males and females, where data for males are shown in blue and data for females are shown in red. When looking at the graph for BMI, it is interesting to note that females with lower incomes tend to have much higher BMIs than males, and this trend changes at an income of around four times the poverty line. When looking at the graph for weight, we can see that the weight for men in general increases as income increases, but for women weight generally decreases as income decreases. We hypothesize this could be related to the fact that these individuals may have more monetary means to achieve media-popularized societal ideals. The waist circumference graph is interesting for women because, as seen in the graph, females in general have a low waist circumference when they have an income lower than the poverty line, but as they approach the poverty line, their waist circumference increases, and then as the income increases, their waist circumference decreases; on the other hand, the waist circumference of males appears to steadily increase with increasing income. We hypothesize that this might be the case because people are often able to access more foods and a healthier diet when they have more money. Finally, in the pulse section, we see that on average pulse decreases slightly for both males and females as income increases, although not dramatically.
+
+In the third tab labeled “Calories and Dietary Supplements”, the x-axis represents the calories consumed in one day on a square root scale. BMI is reflected on the y-axis, also on a square root scale.  By selecting from the drop-down menu, one can choose to filter the data by people who wish to weigh more, the same, or less, or select “Any” to see all three groups together on the same plot. Each point ranges from black to light blue, where black represents no dietary supplements taken and light blue represents twenty dietary supplements taken. Most people in the study took only a low number of dietary supplements (tab 1 shows a graph with more information about dietary supplements). We can see that the data includes many more individuals that would like to lose weight than those that would like to gain weight. The people who want to lose weight in general have a slightly higher BMI and a slightly lower daily caloric intake than those who wish to gain weight. The axes for caloric intake and BMI are fixed to allow for easier comparison between groups.
+
+#### Logistic Regression and Principal Component Analysis
+
+We next aimed to explore both regression and machine learning models for predicting UWCBs. Using the variables described in the exploratory analysis, the following logistic regression models were fitted:
+
+*   Logistic regression with all predictors
+*   Logistic regression with bidirectional stepwise selection using Akaike Information Criterion (AIC) as the stop criteria
+*   Logistic regression with lasso selection using cross validation (CV) as the stop criteria
+*   Logistic regression following principal component analysis (PCA)
+
+A 70% training, 30% test set split was used and the `stratified` function was used to obtain the same percentage of individuals classified as having UWCB in training and test set.
+
+
+```{r}
+set.seed(1)
+# Create training and test set accounting for prevalence of the outcome
+x <- stratified(dat, "UWCB", 0.7, keep.rownames = TRUE)
+train_set <- x %>% dplyr::select(-rn)
+train_index <- as.numeric(x$rn)
+test_set <- dat[-train_index,]
+
+```
+
+```{r, message=F, warning=F, results = 'hide'}
+#Logistic regression models
+#Model A: logistic regression with all predictors
+logit_all_fit <- glm(UWCB ~ ., data=train_set, family = "binomial")
+p_hat_logit_all <- predict(logit_all_fit, newdata = test_set, type = "response")
+roc_logit_all <- roc(test_set$UWCB, p_hat_logit_all)
+
+y_hat_logit_all <- factor(ifelse(p_hat_logit_all > 0.5, 1, 0))
+confusionMatrix(data = y_hat_logit_all, reference = test_set$UWCB, positive = "1")
+
+coords(roc_logit_all, "best")
+y_hat_logit_all_youden <- factor(ifelse(p_hat_logit_all > 0.147159, 1, 0))
+confusionMatrix(data = y_hat_logit_all_youden, reference = test_set$UWCB, positive = "1")
+
+summary(logit_all_fit)
+```
+
+```{r, message=F, warning=F, results = 'hide'}
+#Model B: logistic regression with stepwise selection using AIC as the stop criteria
+logit_AIC_fit <- stepAIC(logit_all_fit, direction="both")
+summary(logit_AIC_fit)
+p_hat_logit_AIC <- predict(logit_AIC_fit, newdata = test_set, type = "response")
+roc_logit_AIC <- roc(test_set$UWCB, p_hat_logit_AIC)
+
+y_hat_logit_AIC <- factor(ifelse(p_hat_logit_AIC > 0.5, 1, 0))
+confusionMatrix(data = y_hat_logit_AIC, reference = test_set$UWCB, positive = "1")
+
+coords(roc_logit_AIC, "best")
+y_hat_logit_AIC_youden <- factor(ifelse(p_hat_logit_AIC > 0.1622158, 1, 0))
+confusionMatrix(data = y_hat_logit_AIC_youden, reference = test_set$UWCB, positive = "1")
+```
+
+```{r, message=F, warning=F, results = 'hide'}
+#Model C: logistic regression with lasso selection using CV as the stop criteria
+set.seed(1)
+train_set_sub <- model.matrix(UWCB~., train_set)[,-1]
+cv.lasso <- cv.glmnet(train_set_sub, y=train_set$UWCB, alpha = 1, nfold=10, family = "binomial")
+logit_lasso_fit <- glmnet(train_set_sub, y=train_set$UWCB, alpha = 1, nfold=10,family = "binomial",lambda = cv.lasso$lambda.1se)
+coef(logit_lasso_fit)
+
+test_set_sub <- model.matrix(UWCB~., test_set)[,-1]
+p_hat_logit_lasso <- predict(logit_lasso_fit, newx = test_set_sub, type = "response")[,1]
+roc_logit_lasso <- roc(test_set$UWCB, p_hat_logit_lasso)
+
+y_hat_logit_lasso <- factor(ifelse(p_hat_logit_lasso > 0.5, 1, 0))
+confusionMatrix(data = y_hat_logit_lasso, reference = test_set$UWCB, positive = "1")
+
+coords(roc_logit_lasso, "best")
+y_hat_logit_lasso_youden <- factor(ifelse(p_hat_logit_lasso > 0.1581955, 1, 0))
+confusionMatrix(data = y_hat_logit_lasso_youden, reference = test_set$UWCB, positive = "1")
+
+```
+
+In the model with all predictors, 13 out of 19 variables showed statistical significance for UWCB prediction (p<0.05): age, gender, education, family income, special diet, depression, BMI, ethnicity, sugar intake, caffeine intake, dietary supplements, diabetes, and sleeping hours. Compared with the 13 significant variables in the model with all predictors, the bidirectional stepwise selection with AIC selected 15 variables, adding energy intake, protein intake, and carbohydrate intake, but ruling out family income. For the model with lasso selection and CV, "lambda.1se" was used instead of "lambda.min" to balance model accuracy and simplicity. Compared with the 13 significant variables in the model with all predictors, lasso selection with 10-fold cross-validation and "lambda.1se" selected 7 variables, leaving out income, sugar intake, caffeine intake, dietary supplements, diabetes, and sleeping hours. 
+
+Some of the predictors were highly correlated (e.g., r=0.84 for carbohydrate intake and sugar intake; r=0.88 for energy intake and fat intake; r=0.87 for energy intake and carbohydrate intake; r=0.78 for energy intake and protein intake). Therefore, PCA was conducted to reduce multicollinearity. For the 50 PCs generated from PCA, PC1 explained 95.4% of the total variance of the 19 predictors. Thus, only PC1 was included in the final logistic regression model.
+
+
+```{r, message=F, warning=F, results = 'hide'}
+#Model D: PCA
+#summary for correlations between predictors
+#train_set_numeric <- train_set %>% mutate(RIAGENDR = as.numeric(RIAGENDR),
+                                          #RIDRETH3 = as.numeric(RIDRETH3),
+                                          #DMDEDUC2 = as.numeric(DMDEDUC2),
+                                          #INDFMIN2 = as.numeric(INDFMIN2),
+                                          #DRQSDIET = as.numeric(DRQSDIET),
+                                          #DPQ020 = as.numeric(DPQ020),
+                                          #UWCB = as.numeric(UWCB),
+                                          #DIQ010 = as.numeric(DIQ010))
+#cor(train_set_numeric)#some of them have high correlations ~0.8
+
+pca <- prcomp(train_set_sub)
+summary(pca)#PC1 accounts for 0.954 variance
+train_set_pc <- predict(pca,train_set_sub)
+train_set_pc <- data.frame(train_set_pc, train_set$UWCB)
+test_set_pc <- predict(pca,test_set_sub)
+test_set_pc <- data.frame(test_set_pc, test_set$UWCB)
+test_set_pc <- test_set_pc %>% mutate(UWCB=as.numeric(test_set.UWCB)-1)
+
+logit_PCA_fit <- glm(train_set.UWCB~PC1,data=train_set_pc,family = "binomial")
+p_hat_logit_PCA <- predict(logit_PCA_fit, newdata = test_set_pc, type = "response")
+roc_logit_PCA <- roc(test_set_pc$UWCB, p_hat_logit_PCA)
+
+y_hat_logit_PCA <- factor(ifelse(p_hat_logit_PCA > 0.5, 1, 0))
+confusionMatrix(data = y_hat_logit_PCA, reference = test_set_pc$test_set.UWCB, positive = "1")
+
+coords(roc_logit_PCA, "best")#find Youden Index: 0.1798193 
+y_hat_logit_PCA_youden <- factor(ifelse(p_hat_logit_PCA > 0.1798193, 1, 0))
+confusionMatrix(data = y_hat_logit_PCA_youden, reference = test_set_pc$test_set.UWCB, positive = "1")
+```
+
+
+#### Model evaluation
+For all regression models, both a cutoff of 0.5 and a "best" cutoff that maximized the Youden's index were used for converting predicted probabilities into response labels. 
+
+```{r}
+#summary table for model performance
+logit_all_summ <- c(0.8275, 0.13360, 0.97541)
+logit_all_Youden_summ <- c(0.6577, 0.7159, 0.6453)
+
+logit_AIC_summ <- c(0.8275, 0.13495, 0.97513)
+logit_AIC_Youden_summ <- c(0.6912,0.6660, 0.6966)
+
+logit_lasso_summ <- c(0.8273, 0.07220, 0.98821)
+logit_lasso_Youden_summ <- c(0.6595, 0.6856, 0.6539)
+
+logit_PCA_summ <- c(0.8243, 0, 1)
+logit_PCA_Youden_summ <- c(0.6719, 0.30162, 0.75083)
+
+t <- as.data.frame(cbind(logit_all_summ, logit_all_Youden_summ, logit_AIC_summ, logit_AIC_Youden_summ, 
+                         logit_lasso_summ, logit_lasso_Youden_summ, logit_PCA_summ, logit_PCA_Youden_summ))
+
+rownames(t) <- cbind(c("Accuracy", "Sensitivity", "Specificity"))
+colnames(t) <- rbind(c("Logit with all predictors (0.5 cutoff)", "Logit with all predictors (Youden cutoff)", 
+                       "Stepwise selction with AIC (0.5 cutoff)", "Stepwise selction with AIC (Youden cutoff)", 
+                       "Lasso selction with CV (0.5 cutoff)", "Lasso selction with CV (Youden cutoff)",
+                       "Logit with PCA (0.5 cutoff)", "Logit with PCA (Youden cutoff)"))
+
+knitr::kable(t(t))
+```
+
+Using 0.5 as the cutoff, all regression models had a similar overall accuracy (82.75% for the models with all predictors and stepwise selection, 82.73% for the model with lasso selection, and 82.43% for the model with PCA). All four models had good specificity but very low sensitivity, especially for the models with lasso selection (sensitivity = 7.22%) and PCA (sensitivity = 0%). Note that although the model with PCA performed well in terms of overall accuracy, it actually predicted no one having UWCB, resulting in 0 sensitivity and 1 specificity. The PCA model with this cutoff would provide no information to the real world practice. The low sensitivity is due to the low prevalence of UWCBs in the NHANES data, meaning that models classifying everyone as not having UWCBs still achieve good accuracy even when the sensitivity is 0%.
+Although the overall accuracy was compromised, models had a more balanced performance between sensitivity and specificity with the "best" cutoff that maximized the Youden's index of the model. Sensitivity was substantially increased for the models with all predictors (from 13.36% to 71.59%), stepwise selection (from 13.50% to 66.60%), and lasso selection (from 7.22% to 68.56%). The model with stepwise selection performed the best in terms of overall accuracy (69.12%).
+
+
+```{r}
+#ROC curve for regression models
+ggroc(list("All predictors"=roc_logit_all,"Stepwise selection"=roc_logit_AIC,"Lasso selection"=roc_logit_lasso,"PCA"=roc_logit_PCA))+
+  geom_segment(aes(x=1, xend=0, y=0, yend=1),color="black",linetype="dashed")+
+  xlab("Specificity")+
+  ylab("Sensitivity")+
+  ggtitle("ROC curves for regression models and PCA") +
+  theme(legend.title = element_blank())
+
+#summary table for AUC
+t <- as.data.frame(cbind(auc(roc_logit_all), auc(roc_logit_AIC), auc(roc_logit_lasso), auc(roc_logit_PCA)))
+colnames(t) <- rbind(c("Logit with all predictors","Stepwise selction with AIC","Lasso selction with CV","Logit with PCA"))
+rownames(t) <- cbind("AUC")
+
+knitr::kable(t(t))
+```
+
+According to the ROC curves and summary table of AUC, the model with stepwise selection performed the best, with a slightly higher AUC (AUC=0.7393) compared with the models with all predictors (AUC=0.7370) and lasso selection (AUC=0.7293). The model with PCA performed similar to random guesses (AUC=0.5305).
+
+For the aforementioned parametric models, we made at least two assumptions:
+
+*   The relationships between predictors and outcomes were linear on the logit scale
+*   There was no interaction between any two of the predictors
+
+However, the violation of these assumptions could lead to compromised model performance. 
+
+
+#### Machine Learning
+Using the variables described above, the following machine learning models were fitted to further investigate predictors of UWCBs:
+
+*   Naive Bayes
+*   LDA
+*   QDA
+*   Decision Tree
+*   Random Forest
+
+As for logistic regression, all models were fitted with the default parameters and using a 0.5 cutoff for converting predicted probabilities into response labels. A 70% training, 30% test set split was used and the `stratified` function was used to obtain the same percentage of individuals classified as having UWCB in training and test set. Since exploratory model fitting and the logistic regression analysis showed that the low prevalence of the outcome resulted in models with extremely low sensitivity, an additional balanced training set was generated, where oversampling of individuals with UWCB was performed using the `ovun.sample` function from the `ROSE` package. All models were fitted using both the regular and the balanced training set (code available in **Appendix C**). 
+
+
+```{r}
+set.seed(1)
+
+# Create balanced training set using oversampling
+data.balanced.over <- ovun.sample(UWCB~., data=train_set, p=0.5, seed=1, method="over")$data
+```
+
+```{r}
+nb_summ <- c(0.8072, 0.2247, 0.9313)
+nb_bal_summ <- c(0.7024, 0.5850, 0.7274)
+
+lda_summ <- c(0.8274, 0.1943, 0.9623)
+lda_bal_summ <- c(0.7159, 0.6012, 0.7403)
+
+qda_summ <- c(0.7691, 0.3347, 0.8617)
+qda_bal_summ <- c(0.749, 0.4028, 0.8227)
+
+dectree_summ <- c(0.8265, 0.1120, 0.9787)
+dectree_bal_summ <- c(0.6858, 0.6215, 0.6995)
+
+randf_summ <- c(0.83, 0.1221, 0.9809)
+randf_bal_summ <- c(0.8253, 0.1734, 0.9642)
+
+tab <- as.data.frame(cbind(nb_summ, nb_bal_summ, lda_summ, lda_bal_summ, 
+                           qda_summ, qda_bal_summ, dectree_summ, dectree_bal_summ,
+                           randf_summ, randf_bal_summ))
+
+rownames(tab) <- cbind(c("Accuracy", "Sensitivity", "Specificity"))
+colnames(tab) <- rbind(c("Naive Bayes", "Naive Bayes (balanced)", "LDA", 
+                         "LDA (balanced)", "QDA", "QDA (balanced)", "Decision tree", 
+                         "Decision tree (balanced)", "Random forest", "Random forest (balanced)"))
+
+knitr::kable(t(tab))
+```
+
+As expected due to the low prevalence of the outcome, the specificity was higher than the sensitivity for all models. The LDA model and the Random Forest model trained with the regular training set performed best in terms of overall accuracy (82.87% for LDA, 83.0% for Random Forest), but also had very low sensitivities (19.43% and 12.21% for LDA and Random Forest, respectively). Training the models on the balanced training set generally caused a strong decrease in accuracy, but also substantially improved sensitivity. Notably, for the QDA model and the Random Forest model, there was only a modest decrease in accuracy (decrease from 76.91% to 74.9% for QDA, decrease from 83.0% to 82.53% for Random Forest), while the sensitivity increased from 33.47% to 40.28% for QDA and from 12.21% to 17.34% for Random Forest.
+
+##### Most predictive features
+For the Random Forest model, the most predictive features were evaluated based on the Gini index. This showed that BMI was most predictive of UCWB, followed by total household income, total protein intake, feeling depressed, and age.
+While protein intake was among the top most predictive features, the Gini index was similar for other nutrients (carbohydrates, sugar, fat) and energy intake in general, and it is therefore unclear if protein intake specifically is more predictive of UWCBs compared to other nutrients (see also multicollinearity identified by logistic regression above).
+
+The abovementioned machine learning models were nect fitted again using only the five most predictive features as identified by the Gini index.
+
+
+```{r, results='hide'}
+set.seed(1)
+# Random forest using regular training data
+randf_fit <- randomForest(UWCB ~ ., data=train_set)
+
+randf_preds <- predict(randf_fit, newdata=test_set, type="prob")[,2]
+y_hat_randf <- factor(ifelse(randf_preds > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_randf), reference = as.factor(test_set$UWCB), positive="1")
+
+# Random forest using oversampled training data
+randf_fit_bal <- randomForest(UWCB ~ ., data=data.balanced.over)
+
+randf_preds_bal <- predict(randf_fit_bal, newdata=test_set, type="prob")[,2]
+y_hat_randf_bal <- factor(ifelse(randf_preds_bal > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_randf_bal), reference = as.factor(test_set$UWCB), positive="1")
+```
+
+```{r}
+# Variable importance for regular training set assessed by Gini impurity
+variable_importance <- importance(randf_fit)
+tmp1 <- data.frame(covariate=rownames(variable_importance), Gini = variable_importance[,1]) %>%
+                  arrange(desc(Gini))
+
+# Variable importance for oversammpled training set assessed by Gini impurity
+variable_importance_bal <- importance(randf_fit_bal)
+variable_names = c("Age", "Gender", "Education", "Income", "Special diet", "Depression",
+                        "Energy intake", "BMI",
+                         "Ethnicity", "Household size", "Protein intake", 
+                         "Carbohydrate intake", "Sugar intake", "Fat intake",
+                         "Caffeine intake", "Alcohol intake", "Dietary supplements",
+                         "Diabetes", "Sleep")
+
+tmp2 <- data.frame(covariate=variable_names, Gini = variable_importance_bal[,1]) %>%
+                  arrange(desc(Gini))
+```
+
+```{r, fig.align = 'center'}
+tmp2 %>% filter(Gini > 900) %>%
+        ggplot(aes(x=reorder(covariate, Gini), y=Gini)) +
+        geom_bar(fill="blue", alpha=0.6, stat='identity') +
+        coord_flip() + xlab("Feature") + ylab("Gini index") +
+        theme(axis.text=element_text(size=8), legend.position = "none")
+```
+
+
+```{r}
+nb_summ <- c(0.8196, 0.1761, 0.9567)
+nb_bal_summ <- c(0.7235, 0.5533, 0.7597)
+
+lda_summ <- c(0.8272, 0.1856, 0.9639)
+lda_bal_summ <- c(0.7154, 0.5776, 0.7448)
+
+qda_summ <- c(0.7925, 0.2962, 0.8982)
+qda_bal_summ <- c(0.7554, 0.3853, 0.8342)
+
+dectree_summ <- c(0.8265, 0.1120, 0.9787)
+dectree_bal_summ <- c(0.6215, 0.6215, 0.6995)
+
+randf_summ <- c(0.8206, 0.1592, 0.9615)
+randf_bal_summ <- c(0.788, 0.2598, 0.9005)
+
+tab <- as.data.frame(cbind(nb_summ, nb_bal_summ, lda_summ, lda_bal_summ, 
+                           qda_summ, qda_bal_summ, dectree_summ, dectree_bal_summ,
+                           randf_summ, randf_bal_summ))
+
+rownames(tab) <- cbind(c("Accuracy", "Sensitivity", "Specificity"))
+colnames(tab) <- rbind(c("Naive Bayes", "Naive Bayes (balanced)", "LDA", 
+                         "LDA (balanced)", "QDA", "QDA (balanced)", "Decision tree", 
+                         "Decision tree (balanced)", "Random forest", "Random forest (balanced)"))
+
+knitr::kable(t(tab))
+```
+
+```{r, results='hide'}
+set.seed(1)
+# Naive Bayes model using regular training data
+nb_fit <- naiveBayes(UWCB ~ INDFMIN2 + BMXBMI + DPQ020 + DR1TPROT + RIDAGEYR, data = train_set)
+
+nb_preds <- predict(nb_fit, test_set, type="raw")[,2]
+y_hat_nb <- factor(ifelse(nb_preds > 0.5, 1, 0))
+
+confusionMatrix(data=as.factor(y_hat_nb), reference = as.factor(test_set$UWCB), positive="1")
+
+# LDA model using regular training data
+lda_fit <- lda(UWCB ~ INDFMIN2 + BMXBMI + DPQ020 + DR1TPROT + RIDAGEYR, data = train_set)
+
+lda_preds <- predict(lda_fit, newdata=test_set)$posterior[,2]
+y_hat_lda <- factor(ifelse(lda_preds > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_lda), reference = as.factor(test_set$UWCB), positive="1")
+
+# QDA model using regular training data
+qda_fit <- qda(UWCB ~ INDFMIN2 + BMXBMI + DPQ020 + DR1TPROT + RIDAGEYR, data=train_set)
+
+qda_preds <- predict(qda_fit, newdata=test_set)$posterior[,2]
+y_hat_qda <- factor(ifelse(qda_preds > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_qda), reference = as.factor(test_set$UWCB), positive="1")
+
+# Classification tree using regular training set
+rpart_fit <- rpart(UWCB ~ INDFMIN2 + BMXBMI + DPQ020 + DR1TPROT + RIDAGEYR, data=train_set)
+
+rpart_preds <- predict(rpart_fit, newdata=test_set)[,2]
+y_hat_rpart <- factor(ifelse(rpart_preds > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_rpart), reference = as.factor(test_set$UWCB), positive="1")
+
+# Random forest using regular training data
+randf_fit <- randomForest(UWCB ~ INDFMIN2 + BMXBMI + DPQ020 + DR1TPROT + RIDAGEYR, data=train_set)
+
+randf_preds <- predict(randf_fit, newdata=test_set, type="prob")[,2]
+y_hat_randf <- factor(ifelse(randf_preds > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_randf), reference = as.factor(test_set$UWCB), positive="1")
+```
+
+```{r, message=F, warning=F, fig.align = 'center'}
+roc_nb <- roc(as.factor(test_set$UWCB), nb_preds)
+roc_lda <- roc(as.factor(test_set$UWCB), lda_preds)
+roc_qda <- roc(as.factor(test_set$UWCB), qda_preds)
+roc_rpart <- roc(as.factor(test_set$UWCB), rpart_preds)
+roc_randf <- roc(as.factor(test_set$UWCB), randf_preds)
+
+# Create plot of ROC curves
+ggroc(list("Naive Bayes" = roc_nb, "LDA" = roc_lda, "QDA" = roc_qda,
+           "Decision Tree" = roc_rpart, "Random Forest" = roc_randf)) +
+  geom_segment(aes(x = 1, xend = 0, y = 0, yend = 1), color = "black", linetype = "dotted") +
+  xlab("Sensitivity") +
+  ylab("Specificity") +
+  ggtitle("ROC curves") +
+  theme(legend.title = element_blank())
+```
+
+```{r}
+auc_nb <- auc(roc_nb)
+auc_lda <- auc(roc_lda)
+auc_qda <- auc(roc_qda)
+auc_rpart <- auc(roc_rpart)
+auc_randf <- auc(roc_randf)
+
+tab <- as.data.frame(cbind(auc_nb, auc_lda, auc_qda, auc_rpart, auc_randf))
+colnames(tab) <- rbind(c("Naive Bayes", "LDA", "QDA", "Decision Tree", "Random Forest"))
+rownames(tab) <- cbind("AUC")
+
+knitr::kable(t(tab))
+```
+
+The models with fewer predictors had an improved accuracy for the Naive Bayes model with both training sets, for the LDA and the Decision Tree model with the balanced training set and for the QDA model with both training sets. For the remaining models, the accuracy stayed the same or decreased slightly. Looking at the AUC curves for the models fitted on the regular training set with the reduced set of parameters showed that Naive Bayes and LDA performed best with AUC values of 0.7174 and 0.7228, respectively.
+
+
+#### Discussion and Outlook
+In this study, we explored data from the NHANES study to assess trends in UWCBs in the US population and develop models for detecting and/or predicting UWCBs. While both logistic regression and machine learning models achieved good accuracy, sensitivity was generally low due to the low prevalence of UWCBs in the study population. We found that BMI, income, energy intake, feeling depressed, and age were predictive of UWCBs. These findings are in good agreement with previous studies that found UWCBs to be more common among obese individuals ([Vander Wal, 2012](https://pubmed.ncbi.nlm.nih.gov/22609397/)), but also that there is an association between UWCBs and weight gain later in life ([Neumark-Sztainer et al., 2012](https://pubmed.ncbi.nlm.nih.gov/22188838/)). BMI may thus both be a predictor and a consequence of UWCBs. Adolescents and young adults have further been reported to be likely engage in UWCBs ([Lopez-Guimera et al., 2013](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3756811/)) and associations between income and UWCBs have been observed ([Tuffa et al., 2020](https://onlinelibrary.wiley.com/doi/full/10.1002/eat.23227)). Depression, which is related to low self-esteem, is also commonly observed among individuals engaging in UWCBs ([Gonsalves et al., 2014](https://pubmed.ncbi.nlm.nih.gov/24357083/)). It is very interesting to note that gender was not identified as one of the most important predictors in our models, questioning the common notion of UWCBs as almost exclusively occurring among females and highlighting the need for research on risk factors for UWCBs across all demographics.
+
+In the current analyses, we found that machine learning models did not outperform the traditional regression approaches as evaluated by discrimination (AUC). This was perhaps to be expected because we conducted literature review before the model building process and variables that were plausibly relevant to UWCBs were selected; thus, the regression models were pre-specified and the potential of overfitting due to model uncertainty was in part avoided. Moreover, the assumed independence and linear effects of predictors for regression models may be true. Therefore, we proposed that in a low-dimensional setting with predictors of substantial prognostic value and acting independently and linearly, machine learning algorithms may not perform better than regression models in outcome prediction. However, we did believe that sophisticated machine learning models should be continuously developed, validated, and updated for high-dimensional settings when a large number of predictors were available.
+
+A limitation of the models described in this work is that only a limited set of features was investigated for model building and further exploration of additional potentially underexplored risk factors for developing UWCBs should be performed in future studies.
+In addition, the NHANES study is performed according to a complex survey design, where certain groups are oversampled and weights, strata and primary sampling units are associated with each observation. We did not account for this complex sampling in the process of model building because most standard R packages for regression and machine learning techniques do not allow for incorporation of survey weights. Sensitivity analyses incorporating weights for the logistic regression models were conducted using the `svyglm` function from the `survey` package (**Appendix C**). All predictors were included in the logistic regression models and the findings derived from the logistic regression model with all predictors did not change substantially after accounting for weights, except that the non-significant p-values became statistically significant for caffeine intake, carbohydrate intake, and diabetes. However, p-value is more dependent on sample size, which dramatically increased after accounting for weights. Moreover, given that the coefficients for coffee intake (0.00018 vs. 0.00017), carbohydrate intake (-0.0072 vs. -0.00608), and diabetes (0.18884 vs. 0.25542) were very similar in the two models, we proposed that ignoring survey design would not compromise the conclusions from our models. 
+
+The performance of predictive models for UWCBs may also depend on the population under investigation. In order to assess cultural factors that may contribute to the development of UWCBs, it would be interesting to test the performance of our models for data sets from countries other than the US. For example, K-NHANES is the equivalent of the NHANES study in South Korea ([Kweon et al., 2014](https://pubmed.ncbi.nlm.nih.gov/24585853/)), and both NHANES and K-NHANES data have been used in a study using deep learning to predict depression ([Oh et al. 2019](https://doi.org/10.1016/j.jad.2019.06.034)).   
