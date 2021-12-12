@@ -1,0 +1,50 @@
+---
+title: "filtering for shiny"
+author: "Lauren Flynn"
+date: "12/1/2021"
+output: html_document
+runtime: shiny
+---
+
+```{r}
+#first we load in the packages
+library(ggplot2)
+library(tidyverse)
+library(shiny)
+#second we load in the data
+
+setwd("~/Desktop/CBQG/Fall 2021/Data Science/project")
+nhanes <- load("masterDF.Rda")
+head(nhanes)
+head(df)
+```
+
+
+```{r}
+#prepare the data for analysis
+
+#using outcomes of: skipping meals (WHD080E), non prescription weight loss supplements (WHD080J), vomiting/laxatives (WHD080K), poor appetite/overeating (DPQ050)
+
+#filter out missingness for outcomes
+filteredoutcomes <- df %>% filter(WHD080E %in% c("14", "0"), WHD080J %in% c("32", "0"), WHD080K %in% c("33", "0"), DPQ050 %in% c("0", "1", "2","3"), !DSDCOUNT %in% c("77","99","NA"), BMXBMI != "NA", BMXWT != "NA", BMXWAIST != "NA", BPXPLS != "NA")
+#nrow(filteredoutcomes)
+
+
+
+#next filter out missingness for covariates
+
+#consider covariates age (ridageyears), ratio of family income to poverty (INDFMPIR), feeling bad about yourself (DPQ060), vigorous rec activities (PAQ6502), race/ethnicity (RIDRETH3), BMI, weight
+
+filtered <- filteredoutcomes %>% filter(INDFMPIR != "NA", !DPQ060 %in% c("77", "99", "NA"), PAQ650 %in% c("1", "2"), !RIDRETH3 %in% c("77","99","NA") , DR1TKCAL != "NA", WHQ040 %in% c("1","2","3"))
+#nrow(filtered)
+
+filtered <- filtered %>% mutate(Sex=ifelse(RIAGENDR==1, "Male", "Female"))
+bodymeasurements <- c(filtered$BMXBMI,filtered$BMXWT, filtered$BMXWAIST,filtered$BPXPLS)
+
+
+save(filtered, file="filtered_for_shiny.Rda")
+
+
+
+
+```
