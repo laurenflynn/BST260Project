@@ -4,7 +4,8 @@ This repository contains files for the BST 260 final project by Lauren Flynn, An
 #### Main files
 - BST260_final.Rmd: R Markdown file containing an overview of project background and motivation, all main analyses (code and figures) and a discussion of our findings.
 - BST260_final.html: BST260_final.Rmd knitted to html
-- AppendixA.Rmd: Code for merging NHANES data for 2007 - 2018 and re-coding variables of interest
+- AppendixA.Rmd: Code for merging NHANES data for 2007 - 2018 and re-coding variables of interest; all xpt files were obtained from the [CDC website for the NHANES survey](https://www.cdc.gov/nchs/nhanes/about_nhanes.htm) and are not included as part of this repository. The output is 'masterDF.Rda', which is included in the Data folder.
+- AppendixA.html: AppendixA.Rmd knitted to html.
 - AppendixB.Rmd: Code for creating graphs of NHANES data for exploratory data analysis (in addition to analyses performed in BST260_final)
 - AppendixC.Rmd: Code for running sensitivity analyses for the inclusion of survey weights in the logistic regression models as well as fitting all machine learning models described in this study
 
