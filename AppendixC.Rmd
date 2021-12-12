@@ -1,0 +1,434 @@
+---
+title: "AppendixC - Machine Learning Models"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(splitstackshape)
+library(caret)
+library(MASS)
+library(pROC)
+library(rpart)
+library(randomForest)
+library(knitr)
+library(e1071)
+library(ROSE)
+```
+
+Criteria for unhealthy weight-control behavior:
+ 
+- Poor appetite or overeating more than half the days/ nearly every day: DPQ050 = 2 or 3
+- Skipped meals to lose weight: WHD080E = 14
+- Took non-RX suppl. to lose weight: WHD080J = 32
+- Took laxatives or vomited: WHD080K = 33
+
+```{r}
+load('./Data/masterDF.Rda')
+df$UWCB <- NA
+
+# Filter to only include adults aged 20 years or older
+df <- df %>% filter(RIDAGEYR >=20)
+
+# Add categorical variable for UWCB; UWCB=NA if no information is available for any of 
+# the criteria
+
+for (i in 1:nrow(df)){
+  if (is.na(df$DPQ050[i]) & is.na(df$WHD080E[i]) &
+      is.na(df$WHD080J[i]) & is.na(df$WHD080K[i])){
+    df$UWCB[i] = NA
+  }
+  else if((!is.na(df$DPQ050[i]) & df$DPQ050[i] %in% c(2,3)) | (!is.na(df$WHD080E[i]) & df$WHD080E[i] == 14) |
+     (!is.na(df$WHD080J[i]) & df$WHD080J[i] == 32) | (!is.na(df$WHD080K[i]) & df$WHD080K[i] == 33)){
+    df$UWCB[i] = 1
+  } else{
+    df$UWCB[i] = 0
+  }
+}
+
+table(df$UWCB)
+sum(is.na(df$UWCB))
+
+# remove observations with NA outcome
+df <- df %>% drop_na(UWCB)
+```
+
+
+Predictors to use in exploratory ML models:
+
+- age: RIDAGEYR
+- gender: RIAGENDR
+- ethnicity: RIDRETH3
+- education: DMDEDUC2
+- income: INDFMIN2
+- special diet: DRQSDIET
+- energy intake: DR1TKCAL
+- BMI: BMXBMI
+- depressed: DPQ020
+- number of people in household: DMDHHSIZ
+- protein: DR1TPROT
+- carbs: DR1TCARB
+- sugars: DR1TSUGR
+- fat: DR1TTFAT
+- caffeine: DR1TCAFF
+- alcohol: DR1TALCO
+- number of dietary supplements: DSDCOUNT
+- diabetes: DIQ010
+- sleep (hours): SLD012
+
+
+```{r}
+# Recode covariates as factors if required
+df <- df %>% mutate(RIAGENDR = as.factor(RIAGENDR),
+                    RIDRETH3 = as.factor(RIDRETH3),
+                    DMDEDUC2 = as.factor(DMDEDUC2),
+                    INDFMIN2 = as.factor(INDFMIN2),
+                    DRQSDIET = as.factor(DRQSDIET),
+                    DPQ020 = as.factor(DPQ020),
+                    UWCB = as.factor(UWCB),
+                    DIQ010 = as.factor(DIQ010))
+
+
+features = c("RIDAGEYR", "RIAGENDR", "DMDEDUC2", "INDFMIN2", "DRQSDIET",
+              "DPQ020", "DR1TKCAL", "BMXBMI", "RIDRETH3",
+             "DMDHHSIZ","DR1TPROT","DR1TCARB","DR1TSUGR",
+             "DR1TTFAT", "DR1TCAFF", "DR1TALCO",  "DSDCOUNT", "DIQ010","SLD012")
+
+# Select relevant columns and drop missing observations
+df2 <- df %>% dplyr::select(UWCB, RIDAGEYR, RIAGENDR, DMDEDUC2, INDFMIN2, DRQSDIET,
+              DPQ020, DR1TKCAL, BMXBMI, RIDRETH3, DMDHHSIZ,
+              DR1TPROT,DR1TCARB,DR1TSUGR, DR1TTFAT, DR1TCAFF, DR1TALCO, DSDCOUNT, 
+              DIQ010,SLD012) %>% drop_na()
+
+```
+
+```{r}
+set.seed(1)
+
+# Create training and test set accounting for prevalence of the outcome
+x <- stratified(df2, "UWCB", 0.7, keep.rownames = TRUE)
+train_set <- x %>% dplyr::select(-rn)
+train_index <- as.numeric(x$rn)
+test_set <- df2[-train_index,]
+
+table(train_set$UWCB)
+```
+```{r}
+# Create balanced training set using oversampling
+data.balanced.over <- ovun.sample(UWCB~., data=train_set, p=0.5, seed=1, method="over")$data
+table(data.balanced.over$UWCB)
+```
+
+```{r}
+# Naive Bayes model using regular training data
+nb_fit <- naiveBayes(UWCB ~ ., data = train_set)
+
+nb_preds <- predict(nb_fit, test_set, type="raw")[,2]
+y_hat_nb <- factor(ifelse(nb_preds > 0.5, 1, 0))
+
+confusionMatrix(data=as.factor(y_hat_nb), reference = as.factor(test_set$UWCB), positive="1")
+
+# Naive Bayes model using oversampled training data
+nb_fit_bal <- naiveBayes(UWCB ~ ., data = data.balanced.over)
+
+nb_preds_bal <- predict(nb_fit_bal, test_set, type="raw")[,2]
+y_hat_nb_bal <- factor(ifelse(nb_preds_bal > 0.5, 1, 0))
+
+confusionMatrix(data=as.factor(y_hat_nb_bal), reference = as.factor(test_set$UWCB), positive="1")
+```
+
+
+```{r}
+set.seed(1)
+# LDA model using regular training data
+lda_fit <- lda(UWCB ~ ., data = train_set)
+
+lda_preds <- predict(lda_fit, newdata=test_set)$posterior[,2]
+y_hat_lda <- factor(ifelse(lda_preds > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_lda), reference = as.factor(test_set$UWCB), positive="1")
+
+# LDA model using oversampled training data
+lda_fit_bal <- lda(UWCB ~ ., data = data.balanced.over)
+
+lda_preds_bal <- predict(lda_fit_bal, newdata=test_set)$posterior[,2]
+y_hat_lda_bal <- factor(ifelse(lda_preds_bal > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_lda_bal), reference = as.factor(test_set$UWCB), positive="1")
+```
+
+```{r}
+set.seed(1)
+# QDA model using regular training data
+qda_fit <- qda(UWCB ~ ., data=train_set)
+
+qda_preds <- predict(qda_fit, newdata=test_set)$posterior[,2]
+y_hat_qda <- factor(ifelse(qda_preds > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_qda), reference = as.factor(test_set$UWCB), positive="1")
+
+# QDA model using oversampled training data
+qda_fit_bal <- qda(UWCB ~ ., data=data.balanced.over)
+
+qda_preds_bal <- predict(qda_fit_bal, newdata=test_set)$posterior[,2]
+y_hat_qda_bal <- factor(ifelse(qda_preds_bal > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_qda_bal), reference = as.factor(test_set$UWCB), positive="1")
+```
+
+
+```{r}
+set.seed(1)
+# Classification tree using regular training set
+rpart_fit <- rpart(UWCB ~ ., data=train_set)
+
+rpart_preds <- predict(rpart_fit, newdata=test_set)[,2]
+y_hat_rpart <- factor(ifelse(rpart_preds > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_rpart), reference = as.factor(test_set$UWCB), positive="1")
+
+# Classification tree using oversampled training data
+rpart_fit_bal <- rpart(UWCB ~ ., data=data.balanced.over)
+
+rpart_preds_bal <- predict(rpart_fit_bal, newdata=test_set)[,2]
+y_hat_rpart_bal <- factor(ifelse(rpart_preds_bal > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_rpart_bal), reference = as.factor(test_set$UWCB), positive="1")
+```
+
+```{r}
+set.seed(1)
+# Random forest using regular training data
+randf_fit <- randomForest(UWCB ~ ., data=train_set)
+
+randf_preds <- predict(randf_fit, newdata=test_set, type="prob")[,2]
+y_hat_randf <- factor(ifelse(randf_preds > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_randf), reference = as.factor(test_set$UWCB), positive="1")
+
+# Random forest using oversampled training data
+randf_fit_bal <- randomForest(UWCB ~ ., data=data.balanced.over)
+
+randf_preds_bal <- predict(randf_fit_bal, newdata=test_set, type="prob")[,2]
+y_hat_randf_bal <- factor(ifelse(randf_preds_bal > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_randf_bal), reference = as.factor(test_set$UWCB), positive="1")
+```
+
+```{r}
+roc_nb <- roc(as.factor(test_set$UWCB), nb_preds)
+roc_lda <- roc(as.factor(test_set$UWCB), lda_preds)
+roc_qda <- roc(as.factor(test_set$UWCB), qda_preds)
+roc_rpart <- roc(as.factor(test_set$UWCB), rpart_preds)
+roc_randf <- roc(as.factor(test_set$UWCB), randf_preds)
+
+# Create plot of ROC curves
+ggroc(list("Naive Bayes" = roc_nb, "LDA" = roc_lda, "QDA" = roc_qda,
+           "Decision Tree" = roc_rpart, "Random Forest" = roc_randf)) +
+  geom_segment(aes(x = 1, xend = 0, y = 0, yend = 1), color = "black", linetype = "dotted") +
+  xlab("Sensitivity") +
+  ylab("Specificity") +
+  ggtitle("ROC curves") +
+  theme(legend.title = element_blank())
+```
+
+
+```{r}
+auc(roc_nb)
+auc(roc_lda)
+auc(roc_qda)
+auc(roc_rpart)
+auc(roc_randf)
+```
+
+
+```{r}
+# Variable importance for regular training set assessed by Gini impurity
+variable_importance <- importance(randf_fit)
+tmp1 <- data.frame(Gini = variable_importance[,1]) %>%
+                  arrange(desc(Gini))
+tmp1
+
+# Variable importance for oversammpled training set assessed by Gini impurity
+variable_importance_bal <- importance(randf_fit_bal)
+tmp2 <- data.frame(Gini = variable_importance_bal[,1]) %>%
+                  arrange(desc(Gini))
+tmp2
+```
+
+```{r}
+# Naive Bayes model using regular training data
+nb_fit <- naiveBayes(UWCB ~ INDFMIN2 + BMXBMI + DPQ020 + DR1TPROT + RIDAGEYR, data = train_set)
+
+nb_preds <- predict(nb_fit, test_set, type="raw")[,2]
+y_hat_nb <- factor(ifelse(nb_preds > 0.5, 1, 0))
+
+confusionMatrix(data=as.factor(y_hat_nb), reference = as.factor(test_set$UWCB), positive="1")
+
+# Naive Bayes model using oversampled training data
+nb_fit_bal <- naiveBayes(UWCB ~ INDFMIN2 + BMXBMI + DPQ020 + DR1TPROT + RIDAGEYR, data = data.balanced.over)
+
+nb_preds_bal <- predict(nb_fit_bal, test_set, type="raw")[,2]
+y_hat_nb_bal <- factor(ifelse(nb_preds_bal > 0.5, 1, 0))
+
+confusionMatrix(data=as.factor(y_hat_nb_bal), reference = as.factor(test_set$UWCB), positive="1")
+```
+
+
+```{r}
+set.seed(1)
+# LDA model using regular training data
+lda_fit <- lda(UWCB ~ INDFMIN2 + BMXBMI + DPQ020 + DR1TPROT + RIDAGEYR, data = train_set)
+
+lda_preds <- predict(lda_fit, newdata=test_set)$posterior[,2]
+y_hat_lda <- factor(ifelse(lda_preds > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_lda), reference = as.factor(test_set$UWCB), positive="1")
+
+# LDA model using oversampled training data
+lda_fit_bal <- lda(UWCB ~ INDFMIN2 + BMXBMI + DPQ020 + DR1TPROT + RIDAGEYR, data = data.balanced.over)
+
+lda_preds_bal <- predict(lda_fit_bal, newdata=test_set)$posterior[,2]
+y_hat_lda_bal <- factor(ifelse(lda_preds_bal > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_lda_bal), reference = as.factor(test_set$UWCB), positive="1")
+```
+
+```{r}
+set.seed(1)
+# QDA model using regular training data
+qda_fit <- qda(UWCB ~ INDFMIN2 + BMXBMI + DPQ020 + DR1TPROT + RIDAGEYR, data=train_set)
+
+qda_preds <- predict(qda_fit, newdata=test_set)$posterior[,2]
+y_hat_qda <- factor(ifelse(qda_preds > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_qda), reference = as.factor(test_set$UWCB), positive="1")
+
+# QDA model using oversampled training data
+qda_fit_bal <- qda(UWCB ~ INDFMIN2 + BMXBMI + DPQ020 + DR1TPROT + RIDAGEYR, data=data.balanced.over)
+
+qda_preds_bal <- predict(qda_fit_bal, newdata=test_set)$posterior[,2]
+y_hat_qda_bal <- factor(ifelse(qda_preds_bal > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_qda_bal), reference = as.factor(test_set$UWCB), positive="1")
+
+```
+
+```{r}
+set.seed(1)
+# Classification tree using regular training set
+rpart_fit <- rpart(UWCB ~ INDFMIN2 + BMXBMI + DPQ020 + DR1TPROT + RIDAGEYR, data=train_set)
+
+rpart_preds <- predict(rpart_fit, newdata=test_set)[,2]
+y_hat_rpart <- factor(ifelse(rpart_preds > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_rpart), reference = as.factor(test_set$UWCB), positive="1")
+
+# Classification tree using oversampled training data
+rpart_fit_bal <- rpart(UWCB ~ INDFMIN2 + BMXBMI + DPQ020 + DR1TPROT + RIDAGEYR, data=data.balanced.over)
+
+rpart_preds_bal <- predict(rpart_fit_bal, newdata=test_set)[,2]
+y_hat_rpart_bal <- factor(ifelse(rpart_preds_bal > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_rpart_bal), reference = as.factor(test_set$UWCB), positive="1")
+```
+
+```{r}
+set.seed(1)
+# Random forest using regular training data
+randf_fit <- randomForest(UWCB ~ INDFMIN2 + BMXBMI + DPQ020 + DR1TPROT + RIDAGEYR, data=train_set)
+
+randf_preds <- predict(randf_fit, newdata=test_set, type="prob")[,2]
+y_hat_randf <- factor(ifelse(randf_preds > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_randf), reference = as.factor(test_set$UWCB), positive="1")
+
+# Random forest using oversampled training data
+randf_fit_bal <- randomForest(UWCB ~ INDFMIN2 + BMXBMI + DPQ020 + DR1TPROT + RIDAGEYR, data=data.balanced.over)
+
+randf_preds_bal <- predict(randf_fit_bal, newdata=test_set, type="prob")[,2]
+y_hat_randf_bal <- factor(ifelse(randf_preds_bal > 0.5, 1, 0))
+
+confusionMatrix(data = as.factor(y_hat_randf_bal), reference = as.factor(test_set$UWCB), positive="1")
+```
+
+```{r}
+nb_summ <- c(0.8072, 0.2247, 0.9313)
+nb_bal_summ <- c(0.7024, 0.5850, 0.7274)
+
+lda_summ <- c(0.8274, 0.1943, 0.9623)
+lda_bal_summ <- c(0.7159, 0.6012, 0.7403)
+
+qda_summ <- c(0.7691, 0.3347, 0.8617)
+qda_bal_summ <- c(0.749, 0.4028, 0.8227)
+
+dectree_summ <- c(0.8265, 0.1120, 0.9787)
+dectree_bal_summ <- c(0.6858, 0.6215, 0.6995)
+
+randf_summ <- c(0.83, 0.1221, 0.9809)
+randf_bal_summ <- c(0.8253, 0.1734, 0.9642)
+
+tab <- as.data.frame(cbind(nb_summ, nb_bal_summ, lda_summ, lda_bal_summ, 
+                           qda_summ, qda_bal_summ, dectree_summ, dectree_bal_summ,
+                           randf_summ, randf_bal_summ))
+
+rownames(tab) <- cbind(c("Accuracy", "Sensitivity", "Specificity"))
+colnames(tab) <- rbind(c("Naive Bayes", "Naive Bayes (balanced)", "LDA", "LDA (balanced)", "QDA", "QDA (balanced)", "Decision tree", "Decision tree (balanced)", "Random forest", "Random forest (balanced)"))
+
+knitr::kable(t(tab))
+```
+
+```{r}
+nb_summ <- c(0.8196, 0.1761, 0.9567)
+nb_bal_summ <- c(0.7235, 0.5533, 0.7597)
+
+lda_summ <- c(0.8272, 0.1856, 0.9639)
+lda_bal_summ <- c(0.7154, 0.5776, 0.7448)
+
+qda_summ <- c(0.7925, 0.2962, 0.8982)
+qda_bal_summ <- c(0.7554, 0.3853, 0.8342)
+
+dectree_summ <- c(0.8265, 0.1120, 0.9787)
+dectree_bal_summ <- c(0.6215, 0.6215, 0.6995)
+
+randf_summ <- c(0.8206, 0.1592, 0.9615)
+randf_bal_summ <- c(0.788, 0.2598, 0.9005)
+
+tab <- as.data.frame(cbind(nb_summ, nb_bal_summ, lda_summ, lda_bal_summ, 
+                           qda_summ, qda_bal_summ, dectree_summ, dectree_bal_summ,
+                           randf_summ, randf_bal_summ))
+
+rownames(tab) <- cbind(c("Accuracy", "Sensitivity", "Specificity"))
+colnames(tab) <- rbind(c("Naive Bayes", "Naive Bayes (balanced)", "LDA", "LDA (balanced)", "QDA", "QDA (balanced)", "Decision tree", "Decision tree (balanced)", "Random forest", "Random forest (balanced)"))
+
+knitr::kable(t(tab))
+```
+
+
+```{r}
+roc_nb <- roc(as.factor(test_set$UWCB), nb_preds)
+roc_lda <- roc(as.factor(test_set$UWCB), lda_preds)
+roc_qda <- roc(as.factor(test_set$UWCB), qda_preds)
+roc_rpart <- roc(as.factor(test_set$UWCB), rpart_preds)
+roc_randf <- roc(as.factor(test_set$UWCB), randf_preds)
+
+# Create plot of ROC curves
+ggroc(list("Naive Bayes" = roc_nb, "LDA" = roc_lda, "QDA" = roc_qda,
+           "Decision Tree" = roc_rpart, "Random Forest" = roc_randf)) +
+  geom_segment(aes(x = 1, xend = 0, y = 0, yend = 1), color = "black", linetype = "dotted") +
+  xlab("Sensitivity") +
+  ylab("Specificity") +
+  ggtitle("ROC curves") +
+  theme(legend.title = element_blank())
+```
+
+
+```{r}
+auc(roc_nb)
+auc(roc_lda)
+auc(roc_qda)
+auc(roc_rpart)
+auc(roc_randf)
+```
+

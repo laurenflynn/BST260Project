@@ -1,0 +1,107 @@
+---
+title: "AppendixD - Sensitivity Analysis for Survey Weights"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(splitstackshape)
+library(caret)
+library(MASS)
+library(pROC)
+library(rpart)
+library(randomForest)
+library(knitr)
+library(e1071)
+library(ROSE)
+library(survey)
+```
+
+```{r}
+# Load merged dataset for the years 2007-2008 through 2017-2018
+load('./Data/masterDF.Rda')
+
+df <- df %>% mutate(RIAGENDR = as.factor(RIAGENDR),
+                    RIDRETH3 = as.factor(RIDRETH3),
+                    DMDEDUC2 = as.factor(DMDEDUC2),
+                    INDFMIN2 = as.factor(INDFMIN2),
+                    DRQSDIET = as.factor(DRQSDIET),
+                    DPQ020 = as.factor(DPQ020),
+                    DIQ010 = as.factor(DIQ010)) %>% 
+  mutate(Year = ifelse(origin.x == "DEMO_E.XPT", 2008,
+                       ifelse(origin.x == "DEMO_F.XPT", 2010,
+                       ifelse(origin.x == "DEMO_G.XPT", 2012,
+                       ifelse(origin.x == "DEMO_H.XPT", 2014,
+                       ifelse(origin.x == "DEMO_I.XPT", 2016, 2018)))))) %>%
+  filter(RIDAGEYR >=20)
+
+# Add categorical variable for UWCB; UWCB=NA if no information is available for any of 
+# the criteria
+df$UWCB <- NA
+
+for (i in 1:nrow(df)){
+  if (is.na(df$DPQ050[i]) & is.na(df$WHD080E[i]) &
+      is.na(df$WHD080J[i]) & is.na(df$WHD080K[i])){
+    df$UWCB[i] = NA
+  }
+  else if((!is.na(df$DPQ050[i]) & df$DPQ050[i] %in% c(2,3)) | (!is.na(df$WHD080E[i]) & df$WHD080E[i] == 14) |
+     (!is.na(df$WHD080J[i]) & df$WHD080J[i] == 32) | (!is.na(df$WHD080K[i]) & df$WHD080K[i] == 33)){
+    df$UWCB[i] = 1
+  } else{
+    df$UWCB[i] = 0
+  }
+}
+
+# remove observations with NA outcome
+df <- df %>% drop_na(UWCB)
+
+# Recode outcome as factor
+df <- df %>% mutate(UWCB = as.factor(UWCB))
+
+df2 <- df %>% dplyr::select(UWCB, RIDAGEYR, RIAGENDR, DMDEDUC2, INDFMIN2, DRQSDIET,
+              DPQ020, DR1TKCAL, BMXBMI, RIDRETH3, DMDHHSIZ,
+              DR1TPROT,DR1TCARB,DR1TSUGR, DR1TTFAT, DR1TCAFF, DR1TALCO, DSDCOUNT, 
+              DIQ010,SLD012) %>% drop_na()
+
+```
+
+### Sensitivity analysis for logistic regression
+```{r}
+#sensitivity analysis
+df3 <- df %>% dplyr::select(SDMVPSU, SDMVSTRA, WTMEC2YR, UWCB, RIDAGEYR, RIAGENDR, DMDEDUC2, INDFMIN2, DRQSDIET,
+                            DPQ020, DR1TKCAL, BMXBMI, RIDRETH3, DMDHHSIZ,
+                            DR1TPROT,DR1TCARB,DR1TSUGR, DR1TTFAT, DR1TCAFF, DR1TALCO, DSDCOUNT, 
+                            DIQ010,SLD012) %>% drop_na()
+
+df3 <- mutate(df3, WTMEC10YR=WTMEC2YR/6)
+NHANES_all <- svydesign(data=df3, id=~SDMVPSU, weights=~WTMEC10YR,strata=~SDMVSTRA, nest=TRUE, survey.lonely.psu = "adjust")
+
+#logistic regression with weights
+sum <- summary(svyglm(UWCB ~ RIDAGEYR + RIAGENDR + DMDEDUC2 + INDFMIN2 + DRQSDIET +
+                        DPQ020 + DR1TKCAL + BMXBMI + RIDRETH3 + DMDHHSIZ +
+                        DR1TPROT + DR1TCARB + DR1TSUGR + DR1TTFAT + DR1TCAFF + DR1TALCO + DSDCOUNT + 
+                        DIQ010 + SLD012, design = NHANES_all, family = "binomial"))
+sum_coe <- as.data.frame(sum$coefficients[,-c(2,3)])
+colnames(sum_coe) <- c("coefficient (with weights)","p-value (with weights)")
+
+#logistic regression without weights
+sum_ori <- summary(glm(UWCB ~ RIDAGEYR + RIAGENDR + DMDEDUC2 + INDFMIN2 + DRQSDIET +
+                         DPQ020 + DR1TKCAL + BMXBMI + RIDRETH3 + DMDHHSIZ +
+                         DR1TPROT + DR1TCARB + DR1TSUGR + DR1TTFAT + DR1TCAFF + DR1TALCO + DSDCOUNT + 
+                         DIQ010 + SLD012, data=df3, family = "binomial"))
+sum_ori_coe <- as.data.frame(sum_ori$coefficients[,-c(2,3)])
+colnames(sum_ori_coe) <- c("coefficient (without weights)","p-value (without weights)")
+
+sum_comparison <- cbind(sum_coe,sum_ori_coe)
+
+row.names(sum_comparison) <- c("Intercept","Age", "Gender2", "Education2", "Education3","Education4","Education5","Education77","Education99",
+                               "Income2","Income3","Income4","Income5","Income6","Income7","Income8","Income9","Income10","Income12","Income13","Income14",
+                               "Income15","Income77","Income99","Special diet2", "Special diet99","Depression1","Depression2","Depression3","Depression77","Depression99",
+                               "Energy intake", "BMI","Ethnicity2","Ethnicity3","Ethnicity4","Ethnicity5","Ethnicity6","Ethnicity7",
+                               "Household size", "Protein intake", "Carbohydrate intake", "Sugar intake", "Fat intake","Caffeine intake", "Alcohol intake", "Dietary supplements",
+                               "Diabetes2","Diabetes3", "Diabetes99","Sleep")
+
+knitr::kable(sum_comparison)
+```
+
