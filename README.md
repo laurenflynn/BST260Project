@@ -10,7 +10,7 @@ This repository contains files for the BST 260 final project by Lauren Flynn, An
 - AppendixB.html: AppendixB.Rmd knitted to kntml
 - AppendixC.Rmd: Code for itting all machine learning models described in this study
 - AppendixC.html: AppendixC.Rmd knitted to html
-- - AppendixD.Rmd: Code for running sensitivity analyses for the inclusion of survey weights in the logistic regression models
+- AppendixD.Rmd: Code for running sensitivity analyses for the inclusion of survey weights in the logistic regression models
 - AppendixD.html: AppendixD.Rmd knitted to html
 
 #### Data
