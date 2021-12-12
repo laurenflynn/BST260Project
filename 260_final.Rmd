@@ -419,8 +419,7 @@ plot1 <- df2 %>% ggplot(aes(x = UCWBlab, y = RIDAGEYR, fill=UWCB)) +
 plot2 <- df2 %>% ggplot(aes(x = UCWBlab, fill = RIAGENDR)) + 
   geom_bar(position = "fill") +
   labs(x="",y = "Proportion") + 
-  guides(fill=guide_legend(title=NULL)) + 
-  scale_fill_discrete(name="Experimental\nCondition",
+  scale_fill_discrete(name="Gender",
                       breaks=c("1", "2"),
                       labels=c("Male", "Female")) +
   ggtitle("Gender and UWCBs")
@@ -434,12 +433,12 @@ plot3 <- df2 %>% ggplot(aes(x = UCWBlab, y = BMXBMI, fill=UWCB)) +
   ggtitle("BMI and UWCBs")
 
 
-ggarrange(plot1, plot2, 
+ggarrange(plot1, plot3, 
           ncol =2, nrow = 1)
 ```
 
-```{r}
-plot3
+```{r, fig.height=5, fig.width=5}
+plot2
 ```
 
 
@@ -448,8 +447,7 @@ plot3
 plot4 <- df2 %>% ggplot(aes(x = UCWBlab,fill = RIDRETH3)) + 
   geom_bar(position = "fill") +
   labs(x="",y = "Proportion") + 
-  guides(fill=guide_legend(title=NULL)) + 
-  scale_fill_discrete(name="Experimental\nCondition",
+  scale_fill_discrete(name="Race",
                       breaks=c("1", "2","3","4","5","6","7"),
                       labels=c("Mexican American","Other Hispanic","Non-Hispanic White","Non-Hispanic Black","Other Race - Including Multi-Racial","Non-Hispanic Asian","Other")) +
   ggtitle("Race and UWCBs")
@@ -465,8 +463,7 @@ table(dfbmi$BMI_c)
 plot5 <- dfbmi %>% ggplot(aes(x = UCWBlab, fill = BMI_c)) + 
   geom_bar(position = "fill") +
   labs(x="",y = "Proportion") + 
-  guides(fill=guide_legend(title=NULL)) + 
-  scale_fill_discrete(name="Experimental\nCondition",
+  scale_fill_discrete(name="Weight category",
                       breaks=c("1", "2","3","4"),
                       labels=c("Underweight", "Healthy","Overweight","Obese")) +
   ggtitle("BMI and UWCBs")
