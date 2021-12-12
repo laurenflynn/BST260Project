@@ -605,17 +605,17 @@ For all regression models, both a cutoff of 0.5 and a "best" cutoff that maximiz
 
 ```{r}
 #summary table for model performance
-logit_all_summ <- c(0.8275, 0.13360, 0.97541)
+logit_all_summ <- c(0.8275, 0.1336, 0.9754)
 logit_all_Youden_summ <- c(0.6577, 0.7159, 0.6453)
 
-logit_AIC_summ <- c(0.8275, 0.13495, 0.97513)
+logit_AIC_summ <- c(0.8275, 0.1350, 0.9751)
 logit_AIC_Youden_summ <- c(0.6912,0.6660, 0.6966)
 
-logit_lasso_summ <- c(0.8273, 0.07220, 0.98821)
+logit_lasso_summ <- c(0.8273, 0.0722, 0.9882)
 logit_lasso_Youden_summ <- c(0.6595, 0.6856, 0.6539)
 
 logit_PCA_summ <- c(0.8243, 0, 1)
-logit_PCA_Youden_summ <- c(0.6719, 0.30162, 0.75083)
+logit_PCA_Youden_summ <- c(0.6719, 0.3016, 0.7508)
 
 t <- as.data.frame(cbind(logit_all_summ, logit_all_Youden_summ, logit_AIC_summ, logit_AIC_Youden_summ, 
                          logit_lasso_summ, logit_lasso_Youden_summ, logit_PCA_summ, logit_PCA_Youden_summ))
@@ -692,8 +692,8 @@ qda_bal_summ <- c(0.749, 0.4028, 0.8227)
 dectree_summ <- c(0.8265, 0.1120, 0.9787)
 dectree_bal_summ <- c(0.6858, 0.6215, 0.6995)
 
-randf_summ <- c(0.83, 0.1221, 0.9809)
-randf_bal_summ <- c(0.8253, 0.1734, 0.9642)
+randf_summ <- c(0.8299, 0.1242, 0.9803)
+randf_bal_summ <- c(0.8247, 0.1754, 0.9642)
 
 tab <- as.data.frame(cbind(nb_summ, nb_bal_summ, lda_summ, lda_bal_summ, 
                            qda_summ, qda_bal_summ, dectree_summ, dectree_bal_summ,
@@ -774,7 +774,7 @@ qda_summ <- c(0.7925, 0.2962, 0.8982)
 qda_bal_summ <- c(0.7554, 0.3853, 0.8342)
 
 dectree_summ <- c(0.8265, 0.1120, 0.9787)
-dectree_bal_summ <- c(0.6215, 0.6215, 0.6995)
+dectree_bal_summ <- c(0.6858, 0.6215, 0.6995)
 
 randf_summ <- c(0.8206, 0.1592, 0.9615)
 randf_bal_summ <- c(0.788, 0.2598, 0.9005)
@@ -852,11 +852,11 @@ ggroc(list("Naive Bayes" = roc_nb, "LDA" = roc_lda, "QDA" = roc_qda,
 ```
 
 ```{r}
-auc_nb <- auc(roc_nb)
-auc_lda <- auc(roc_lda)
-auc_qda <- auc(roc_qda)
-auc_rpart <- auc(roc_rpart)
-auc_randf <- auc(roc_randf)
+auc_nb <- round(auc(roc_nb),4)
+auc_lda <- round(auc(roc_lda),4)
+auc_qda <- round(auc(roc_qda),4)
+auc_rpart <- round(auc(roc_rpart),4)
+auc_randf <- round(auc(roc_randf),4)
 
 tab <- as.data.frame(cbind(auc_nb, auc_lda, auc_qda, auc_rpart, auc_randf))
 colnames(tab) <- rbind(c("Naive Bayes", "LDA", "QDA", "Decision Tree", "Random Forest"))
@@ -874,6 +874,6 @@ In this study, we explored data from the NHANES study to assess trends in UWCBs 
 In the current analyses, we found that machine learning models did not outperform the traditional regression approaches as evaluated by discrimination (AUC). This was perhaps to be expected because we conducted literature review before the model building process and variables that were plausibly relevant to UWCBs were selected; thus, the regression models were pre-specified and the potential of overfitting due to model uncertainty was in part avoided. Moreover, the assumed independence and linear effects of predictors for regression models may be true. Therefore, we proposed that in a low-dimensional setting with predictors of substantial prognostic value and acting independently and linearly, machine learning algorithms may not perform better than regression models in outcome prediction. However, we did believe that sophisticated machine learning models should be continuously developed, validated, and updated for high-dimensional settings when a large number of predictors were available.
 
 A limitation of the models described in this work is that only a limited set of features was investigated for model building and further exploration of additional potentially underexplored risk factors for developing UWCBs should be performed in future studies.
-In addition, the NHANES study is performed according to a complex survey design, where certain groups are oversampled and weights, strata and primary sampling units are associated with each observation. We did not account for this complex sampling in the process of model building because most standard R packages for regression and machine learning techniques do not allow for incorporation of survey weights. Sensitivity analyses incorporating weights for the logistic regression models were conducted using the `svyglm` function from the `survey` package (**Appendix C**). All predictors were included in the logistic regression models and the findings derived from the logistic regression model with all predictors did not change substantially after accounting for weights, except that the non-significant p-values became statistically significant for caffeine intake, carbohydrate intake, and diabetes. However, p-value is more dependent on sample size, which dramatically increased after accounting for weights. Moreover, given that the coefficients for coffee intake (0.00018 vs. 0.00017), carbohydrate intake (-0.0072 vs. -0.00608), and diabetes (0.18884 vs. 0.25542) were very similar in the two models, we proposed that ignoring survey design would not compromise the conclusions from our models. 
+In addition, the NHANES study is performed according to a complex survey design, where certain groups are oversampled and weights, strata and primary sampling units are associated with each observation. We did not account for this complex sampling in the process of model building because most standard R packages for regression and machine learning techniques do not allow for incorporation of survey weights. Sensitivity analyses incorporating weights for the logistic regression models were conducted using the `svyglm` function from the `survey` package (**Appendix D**). All predictors were included in the logistic regression models and the findings derived from the logistic regression model with all predictors did not change substantially after accounting for weights, except that the non-significant p-values became statistically significant for caffeine intake, carbohydrate intake, and diabetes. However, p-value is more dependent on sample size, which dramatically increased after accounting for weights. Moreover, given that the coefficients for coffee intake (0.00018 vs. 0.00017), carbohydrate intake (-0.0072 vs. -0.00608), and diabetes (0.18884 vs. 0.25542) were very similar in the two models, we proposed that ignoring survey design would not compromise the conclusions from our models. 
 
 The performance of predictive models for UWCBs may also depend on the population under investigation. In order to assess cultural factors that may contribute to the development of UWCBs, it would be interesting to test the performance of our models for data sets from countries other than the US. For example, K-NHANES is the equivalent of the NHANES study in South Korea ([Kweon et al., 2014](https://pubmed.ncbi.nlm.nih.gov/24585853/)), and both NHANES and K-NHANES data have been used in a study using deep learning to predict depression ([Oh et al. 2019](https://doi.org/10.1016/j.jad.2019.06.034)).   
