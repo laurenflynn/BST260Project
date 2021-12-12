@@ -2,6 +2,7 @@
 This repository contains files for the BST 260 final project by Lauren Flynn, Anna Lai, Kehuan Lin, and Carolin Schulte, completed in Fall 2021.
 
 #### Main files
+All main analyses are included in BST260_final. The supplementary information in the different appendices is referenced as appropriate.
 - BST260_final.Rmd: R Markdown file containing an overview of project background and motivation, all main analyses (code and figures) and a discussion of our findings.
 - BST260_final.html: BST260_final.Rmd knitted to html
 - AppendixA.Rmd: Code for merging NHANES data for 2007 - 2018 and re-coding variables of interest; all xpt files were obtained from the [CDC website for NHANES](https://www.cdc.gov/nchs/nhanes/about_nhanes.htm) and are not included as part of this repository. The output is 'masterDF.Rda', which is included in the Data folder.
