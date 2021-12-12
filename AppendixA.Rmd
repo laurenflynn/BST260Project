@@ -1,0 +1,696 @@
+---
+title: "AppendixA - DataMerging"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(haven)
+```
+
+### Demographics
+
+```{r }
+# Read in demographics files
+DEMO_list <- list.files(pattern="DEMO_*")
+DEMO <- sapply(DEMO_list, read_xpt)
+
+# Select relevant columns
+for (i in 1:length(DEMO)){
+  if (i %in% c(1,2)){
+    DEMO[[i]] <- DEMO[[i]] %>% select(SEQN, DMDEDUC2, RIDAGEYR, RIDRETH1, DMDMARTL,
+                                      RIDEXPRG, INDFMIN2, INDFMPIR, DMDFMSIZ, DMDHHSIZ,
+                                      RIAGENDR, WTINT2YR, WTMEC2YR, SDMVPSU, SDMVSTRA) %>% rename(RIDRETH3 = RIDRETH1)
+    }else{
+      DEMO[[i]] <- DEMO[[i]] %>% select(SEQN, DMDEDUC2, RIDAGEYR, RIDRETH3, DMDMARTL,
+                                        RIDEXPRG, INDFMIN2, INDFMPIR, DMDFMSIZ, DMDHHSIZ,
+                                        RIAGENDR, WTINT2YR, WTMEC2YR, SDMVPSU, SDMVSTRA)
+    
+  }
+}
+
+```
+
+```{r}
+# Merge demgraphics data
+merged_demo <- bind_rows(DEMO, .id = "origin")
+merged_demo$DMDEDUC2[which(merged_demo$DMDEDUC2==7)] = 77
+merged_demo$DMDEDUC2[which(merged_demo$DMDEDUC2==9)] = 99
+head(merged_demo)
+```
+
+### Examination data
+
+```{r}
+# Read in body measure data
+BMX_list <- list.files(pattern="BMX_*")
+BMX <- sapply(BMX_list, read_xpt)
+
+# Select columns of interest
+for (i in 1:length(BMX)){
+  BMX[[i]] <- BMX[[i]] %>% select(SEQN, BMXWT, BMXHT, BMXBMI,
+                                  BMXWAIST)
+}
+```
+
+```{r}
+# Read in blood pressure data
+BPX_list <- list.files(pattern="BPX_*")
+BPX <- sapply(BPX_list, read_xpt)
+
+# Select columns of interest
+for (i in 1:length(BPX)){
+  BPX[[i]] <- BPX[[i]] %>% select(SEQN, BPXCHR, BPXPLS, BPXPULS, BPXSY2, BPXDI2)
+}
+```
+
+```{r}
+# Read in oral health data
+OHXREF_list <- list.files(pattern="OHXREF_*")
+
+OHXREF <- list()
+OHXREF[[1]] <- read_xpt(OHXREF_list[[1]])
+OHXREF[[2]] <- read_xpt(OHXREF_list[[2]])
+OHXREF[[3]] <- read_xpt(OHXREF_list[[3]])
+OHXREF[[4]] <- read_xpt(OHXREF_list[[4]])
+OHXREF[[5]] <- read_xpt(OHXREF_list[[5]])
+
+# Select columns of interest
+for (i in 1:length(OHXREF)){
+  OHXREF[[i]] <- OHXREF[[i]] %>% select(SEQN, OHAREC)
+}
+```
+
+```{r}
+# Join examination data depending on availability of oral health data
+EXAM = list()
+for (i in 1:length(BMX)){
+  if (i==1){
+    EXAM[[i]] <- full_join(BMX[[i]], BPX[[i]], by="SEQN")
+  }else{
+    EXAM[[i]] <- full_join(BMX[[i]], BPX[[i]], by="SEQN") %>% full_join(OHXREF[[i-1]], by="SEQN")
+  }
+}
+```
+
+```{r}
+# Merge data frames
+merged_exam <- bind_rows(EXAM, .id = "origin")
+head(merged_exam)
+```
+
+#### Dietary data
+
+### Dietary Data
+```{r}
+# Read in total nutrient intakes - first day files for 2007-2018
+DR1TOT_list <- list.files(pattern="DR1TOT_*")
+
+
+DR1TOT <- sapply(DR1TOT_list, read_xpt)
+
+# Select columns of interest (differs slightly based on year of the study)
+for (i in 1:length(DR1TOT)){
+  if(i==1){
+ DR1TOT[[i]] <- DR1TOT[[i]] %>% select("SEQN", "WTDRD1", "DRABF", "DR1DRSTZ",
+                                       "DRQSDIET", "DRQSDT1", "DRQSDT2",
+                                       "DRQSDT3", "DRQSDT4", "DRQSDT5", "DRQSDT6", "DRQSDT7",
+                                       "DRQSDT8","DRQSDT9", "DRQSDT10", "DRQSDT91","DR1TKCAL",
+                                       "DR1TNUMF", "DR1TPROT", "DR1TCARB", "DR1TSUGR",
+                                       "DR1TFIBE", "DR1TTFAT", "DR1TCAFF", "DR1TALCO",
+                                       "DR1_320Z") %>% filter(DRABF != 1)}
+else{
+  DR1TOT[[i]] <- DR1TOT[[i]] %>% select("SEQN", "WTDRD1", "DRABF", "DR1DRSTZ",
+                                       "DRQSDIET", "DRQSDT1", "DRQSDT2", "DRQSDT3", "DRQSDT4",
+                                       "DRQSDT5", "DRQSDT6", "DRQSDT7","DRQSDT8","DRQSDT9",
+                                       "DRQSDT10", "DRQSDT11", "DRQSDT12", "DRQSDT91",
+                                       "DR1TKCAL", "DR1TNUMF", "DR1TPROT", "DR1TCARB",
+                                       "DR1TSUGR", "DR1TFIBE", "DR1TTFAT", "DR1TCAFF",
+                                       "DR1TALCO","DR1_320Z") %>% filter(DRABF != 1)
+  }
+}
+
+
+# Replace NAs with 0 for special diets when DRQSDIET information is available
+
+diets = c("DRQSDT1", "DRQSDT2","DRQSDT3", "DRQSDT4", "DRQSDT5", "DRQSDT6", "DRQSDT7",
+                                       "DRQSDT8","DRQSDT9", "DRQSDT10", "DRQSDT91")
+
+for (i in 1:length(DR1TOT)){
+  for (j in 1:nrow(DR1TOT[[i]])){
+    if (DR1TOT[[i]]$DRQSDIET[j] == 2) {
+      for (k in diets){
+            DR1TOT[[i]][j,k] = 0
+      }
+    } else if (DR1TOT[[i]]$DRQSDIET[j] == 1){
+      for (k in diets){
+        if(is.na(DR1TOT[[i]][j,k])){
+          DR1TOT[[i]][j,k] = 0
+        }
+      }
+    }
+  }
+}
+```
+
+```{r}
+# Read in total dietary supplement use (30 days) files for 2007-2018
+DSQTOT_list <- list.files(pattern="DSQTOT_*")
+DSQTOT <- sapply(DSQTOT_list, read_xpt)
+
+# Select relevant columns
+
+for (i in 1:length(DSQTOT)){
+  DSQTOT[[i]] <- DSQTOT[[i]] %>% select("SEQN", "DSDCOUNT", "DSDANCNT", "DSD010", "DSD010AN",
+                                        "DSQTKCAL", "DSQTPROT", "DSQTCARB", "DSQTSUGR",
+                                        "DSQTFIBE", "DSQTTFAT")
+}
+
+
+nutrients = c("DSQTKCAL", "DSQTPROT","DSQTCARB", "DSQTSUGR", "DSQTFIBE", "DSQTTFAT")
+
+# Recode NAs as 0 if a subject was not asked about nutrients from dietary supplements
+for (i in 1:length(DSQTOT)){
+  for (j in 1:nrow(DSQTOT[[i]])){
+    if (!is.na(DSQTOT[[i]]$DSD010[j])){
+      if (DSQTOT[[i]]$DSD010[j] == 2) {
+        for (k in nutrients){
+              DSQTOT[[i]][j,k] = 0
+        }
+      } else if (DSQTOT[[i]]$DSD010[j] == 1){
+        for (k in nutrients){
+          if(is.na(DSQTOT[[i]][j,k])){
+            DSQTOT[[i]][j,k] = 0
+          }
+        }
+      }
+    }
+  }
+}
+
+# Read in individual dietary supplement use (30 days) files for 2007-2018
+DSQIDS_list <- list.files(pattern="DSQIDS*")
+DSQIDS <- sapply(DSQIDS_list, read_xpt)
+
+# Select columns of interest (different for different years due to changes in questions asked)
+for (i in 1:length(DSQIDS)){
+  if (i == 1){
+    DSQIDS[[i]] <- DSQIDS[[i]] %>% select("SEQN", "DSQ124", "DSQ128A", "DSQ128B", "DSQ128C", 
+                                        "DSQ128D", "DSQ128E", "DSQ128F", "DSQ128G", "DSQ128H", 
+                                        "DSQ128I", "DSQ128J", "DSQ128K", "DSQ128L", "DSQ128M", 
+                                        "DSQ128N", "DSQ128O", "DSQ128P", "DSQ128Q", "DSQ128R", 
+                                        "DSQ128S", "DSD128T", "DSD128U", "DSD128V", "DSD128W", 
+                                        "DSD128X", "DSD128Y", "DSD128Z", "DSD128AA", "DSD128BB",
+                                        "DSD128CC", "DSD128DD", "DSD128EE", "DSD128FF",
+                                        "DSD128GG", "DSD128HH", "DSD128II", "RXQ215A")
+  } else if (i == 2){
+    DSQIDS[[i]] <- DSQIDS[[i]] %>% select("SEQN", "DSQ124", "DSQ128A", "DSQ128B", "DSQ128C", 
+                                        "DSQ128D", "DSQ128E", "DSQ128F", "DSQ128G", "DSQ128H", 
+                                        "DSQ128I", "DSQ128J", "DSQ128K", "DSQ128L", "DSQ128M", 
+                                        "DSQ128N", "DSQ128O", "DSQ128P", "DSQ128Q", "DSQ128R", 
+                                        "DSQ128S", "DSD128T", "DSD128U", "DSD128V", "DSD128W", 
+                                        "DSD128X", "DSD128Y", "DSD128Z", "DSD128AA", "DSD128BB",
+                                        "DSD128CC", "DSD128DD", "DSD128EE", "DSD128FF",
+                                        "DSD128GG", "DSD128HH", "DSD128II", "DSD128JJ", "RXQ215A")
+  }
+  else if (i == 3) {
+    DSQIDS[[i]] <- DSQIDS[[i]] %>% select("SEQN", "DSQ124", "DSQ128A", "DSQ128B", "DSQ128C", 
+                                          "DSQ128D", "DSQ128E", "DSQ128F", "DSQ128G", "DSQ128H",
+                                          "DSQ128I", "DSQ128J", "DSQ128K", "DSQ128L", "DSQ128M",
+                                          "DSQ128N", "DSQ128O", "DSQ128P", "DSQ128Q", "DSQ128R",
+                                          "DSQ128S", "DSD128T", "DSD128U", "DSD128V", "DSD128W",
+                                          "DSD128X", "DSD128Z", "DSD128AA", "DSD128BB", 
+                                          "DSD128DD", "DSD128EE", "DSD128FF", "DSD128GG",
+                                          "DSD128HH", "DSD128II", "DSD128JJ", "RXQ215A")
+  } else {
+    DSQIDS[[i]] <- DSQIDS[[i]] %>% select("SEQN", "DSQ124", "DSQ128A", "DSQ128B", "DSQ128C", 
+                                          "DSQ128D", "DSQ128E", "DSQ128F", "DSQ128G", "DSQ128H",
+                                          "DSQ128I", "DSQ128J", "DSQ128K", "DSQ128L", "DSQ128M",
+                                          "DSQ128N", "DSQ128O", "DSQ128P", "DSQ128Q", "DSQ128R",
+                                          "DSQ128S", "DSD128T", "DSD128V", "DSD128W", 
+                                          "DSD128X", "DSD128Z", "DSD128AA", "DSD128BB", 
+                                          "DSD128DD", "DSD128EE", "DSD128FF", "DSD128GG",
+                                          "DSD128HH", "DSD128II", "DSD128JJ", "RXQ215A")
+  }
+}
+
+# Add columns of NAs when a question was not asked in all years of the study
+DSQIDS[[1]]["DSD128JJ"] <- NA
+DSQIDS[[3]]["DSD128Y"] <- NA
+DSQIDS[[4]]["DSD128Y"] <- NA
+DSQIDS[[5]]["DSD128Y"] <- NA
+DSQIDS[[6]]["DSD128Y"] <- NA
+DSQIDS[[4]]["DSD128U"] <- NA
+DSQIDS[[5]]["DSD128U"] <- NA
+DSQIDS[[6]]["DSD128U"] <- NA
+DSQIDS[[3]]["DSD128CC"] <- NA
+DSQIDS[[4]]["DSD128CC"] <- NA
+DSQIDS[[5]]["DSD128CC"] <- NA
+DSQIDS[[6]]["DSD128CC"] <- NA
+
+```
+
+```{r}
+# Join dietary data
+DIET = list()
+for (i in 1:length(DR1TOT)){
+  DIET[[i]] <- full_join(DR1TOT[[i]], DSQTOT[[i]], by="SEQN") %>% full_join(DSQIDS[[i]], by="SEQN")
+}
+
+suppl = c("DSQ124", "DSQ128A", "DSQ128B", "DSQ128C", "DSQ128D", "DSQ128E", "DSQ128F", "DSQ128G",
+          "DSQ128H", "DSQ128I", "DSQ128J", "DSQ128K", "DSQ128L", "DSQ128M", 
+          "DSQ128N", "DSQ128O", "DSQ128P", "DSQ128Q", "DSQ128R", 
+          "DSQ128S", "DSD128T", "DSD128U", "DSD128V", "DSD128W", 
+          "DSD128X", "DSD128Y", "DSD128Z", "DSD128AA", "DSD128BB",
+          "DSD128CC", "DSD128DD", "DSD128EE", "DSD128FF","DSD128GG", 
+          "DSD128HH", "DSD128II", "DSD128JJ")
+
+# Replace NAs which are due to a question not being asked with 0 (type of supplement not available if subject does not take any supplements)
+for (i in 1:length(DIET)){
+  for (j in 1:nrow(DIET[[i]])){
+    if (!is.na(DIET[[i]]$DSD010[j])){
+    if (DIET[[i]]$DSD010[j] == 2) {
+      for (k in suppl){
+            DIET[[i]][j,k] = 0
+      }
+    } else if (DIET[[i]]$DSD010[j] == 1){
+      for (k in suppl){
+        if(is.na(DIET[[i]][j,k])){
+          DIET[[i]][j,k] = 0
+        }
+      }
+    }
+    }
+  }
+}
+
+```
+
+```{r}
+# Merge dietary data and recode missing data to make NA coding uniform
+merged_diet <- bind_rows(DIET, .id = "origin")
+merged_diet$DRQSDIET[which(merged_diet$DRQSDIET==9)] = 99
+merged_diet$DSD010[which(merged_diet$DSD010==7)] = 77
+merged_diet$DSD010[which(merged_diet$DSD010==9)] = 99
+merged_diet$DSD010AN[which(merged_diet$DSD010AN==7)] = 77
+merged_diet$DSD010AN[which(merged_diet$DSD010AN==9)] = 99
+merged_diet$DSQ124[which(merged_diet$DSQ124==7)] = 77
+merged_diet$DSQ124[which(merged_diet$DSQ124==9)] = 99
+
+head(merged_diet)
+```
+
+#### Questionnaire data
+
+```{r}
+# Read in alcohol data
+ALQ_list <- list.files(pattern="ALQ_*")
+ALQ <- sapply(ALQ_list, read_xpt)
+
+# Select relevant columns and
+for (i in 1:length(ALQ)){
+  if (i == 6){
+    ALQ[[i]] <- ALQ[[i]] %>% select(SEQN, ALQ111, ALQ121)
+  }else{
+    ALQ[[i]] <- ALQ[[i]] %>% select(SEQN, ALQ110, ALQ120Q) %>%
+      rename(ALQ121=ALQ120Q, ALQ111=ALQ110) %>% mutate(ALQ121 = case_when(
+      ALQ121 == 0 ~ 0,
+      ALQ121 <= 2 ~ 10,
+      ALQ121 <= 6 ~ 9,
+      ALQ121 <= 11 ~ 8,
+      ALQ121 <= 12 ~ 7,
+      ALQ121 <= 36 ~ 6,
+      ALQ121 <= 52 ~ 5,
+      ALQ121 <= 104 ~ 4,
+      ALQ121 <= 208 ~ 3,
+      ALQ121 <= 364 ~ 2,
+      ALQ121 == 365 ~ 1,
+      ))
+  }
+}
+
+# Replcae NA with 0 for amount of alcohol consumed if subject never drank alcohol
+for (i in 1:length(ALQ)){
+  for (j in 1:nrow(ALQ[[i]])){
+    if (!is.na(ALQ[[i]]$ALQ111[j])){
+      if (ALQ[[i]]$ALQ111[j] == 2) {
+              ALQ[[i]][j,'ALQ121'] = 0
+      } 
+    }
+  }
+}
+
+```
+
+```{r}
+# Read in blood pressure data
+BPQ_list <- list.files(pattern="BPQ_*")
+BPQ <- sapply(BPQ_list, read_xpt)
+
+for (i in 1:length(BPQ)){
+  BPQ[[i]] <- BPQ[[i]] %>% select(SEQN, BPQ020)
+}
+```
+
+```{r}
+# Read in data on money spent
+CBQ_list <- list.files(pattern="CBQ*")
+CBQ <- sapply(CBQ_list, read_xpt)
+
+for (i in 1:length(CBQ)){
+  if (i < 5){
+  CBQ[[i]] <- CBQ[[i]] %>% select(SEQN, CBD070, CBD090, CBD110, CBD120, CBD130) %>%
+    rename(CBD071=CBD070, CBD091=CBD090, CBD111=CBD110, CBD121=CBD120, CBD131=CBD130)
+  }
+  else{
+     CBQ[[i]] <- CBQ[[i]] %>% select(SEQN, CBD071, CBD091, CBD111, CBD121, CBD131)
+  }
+}
+```
+
+```{r}
+# Read in data on stomach illnesses
+HSQ_list <- list.files(pattern="HSQ_*")
+HSQ <- sapply(HSQ_list, read_xpt)
+
+for (i in 1:length(HSQ)){
+  HSQ[[i]] <- HSQ[[i]] %>% select(SEQN, HSQ510)
+}
+```
+
+```{r}
+# Read in data on diabetes
+DIQ_list <- list.files(pattern="DIQ_*")
+DIQ <- sapply(DIQ_list, read_xpt)
+
+for (i in 1:length(DIQ)){
+  DIQ[[i]] <- DIQ[[i]] %>% select(SEQN, DIQ010)
+}
+```
+
+```{r}
+# Read in data on cannabis use
+DUQ_list <- list.files(pattern="DUQ_*")
+DUQ <- sapply(DUQ_list, read_xpt)
+
+for (i in 1:length(DUQ)){
+  DUQ[[i]] <- DUQ[[i]] %>% select(SEQN, DUQ200)
+}
+```
+
+```{r}
+# Read in data on weight at birth
+ECQ_list <- list.files(pattern="ECQ_*")
+ECQ <- sapply(ECQ_list, read_xpt)
+
+for (i in 1:length(ECQ)){
+  ECQ[[i]] <- ECQ[[i]] %>% select(SEQN, ECD070A)
+}
+```
+
+```{r}
+# Read in data on food security
+FSQ_list <- list.files(pattern="FSQ_*")
+FSQ <- sapply(FSQ_list, read_xpt)
+
+for (i in 1:length(FSQ)){
+  FSQ[[i]] <- FSQ[[i]] %>% select(SEQN, FSD032A, FSD032B, FSD032C, FSD151, FSQ165)
+}
+```
+
+```{r}
+# Read in data on health insurance
+HIQ_list <- list.files(pattern="HIQ_*")
+HIQ <- sapply(HIQ_list, read_xpt)
+
+for (i in 1:length(HIQ)){
+  HIQ[[i]] <- HIQ[[i]] %>% select(SEQN, HIQ011)
+}
+```
+
+```{r}
+# Read in data on cancer history
+MCQ_list <- list.files(pattern="MCQ_*")
+MCQ <- sapply(MCQ_list, read_xpt)
+
+for (i in 1:length(MCQ)){
+  MCQ[[i]] <- MCQ[[i]] %>% select(SEQN, MCQ220)
+}
+```
+
+```{r}
+# Read in data on oral health
+OHQ_list <- list.files(pattern="OHQ_*")
+OHQ <- sapply(OHQ_list, read_xpt)
+
+for (i in 1:length(OHQ)){
+  if(i==1){
+  OHQ[[i]] <- OHQ[[i]] %>% select(SEQN, OHQ011) %>% rename(OHQ845=OHQ011) %>%
+    mutate(OHQ845=case_when(
+      OHQ845 == 11 ~ 1,
+      OHQ845 == 12 ~ 2,
+      OHQ845 == 13 ~ 3,
+      OHQ845 == 14 ~ 4,
+      OHQ845 == 15 ~ 5,
+    ))
+  } else{
+    OHQ[[i]] <- OHQ[[i]] %>% select(SEQN, OHQ845)
+  }
+}
+
+```
+
+```{r}
+# Read in data on sleep problems
+SLQ_list <- list.files(pattern="SLQ_*")
+SLQ <- sapply(SLQ_list, read_xpt)
+
+for (i in 1:length(SLQ)){
+  if(i < 5){
+  SLQ[[i]] <- SLQ[[i]] %>% select(SEQN, SLD010H, SLQ050) %>% 
+    rename(SLD012 = SLD010H)
+  } else {
+  SLQ[[i]] <- SLQ[[i]] %>% select(SEQN, SLD012, SLQ050)
+  }
+}
+```
+
+```{r}
+# Read in data on smoking
+SMQ_list <- list.files(pattern="SMQ_*")
+SMQ <- sapply(SMQ_list, read_xpt)
+
+for (i in 1:length(SMQ)){
+  SMQ[[i]] <- SMQ[[i]] %>% select(SEQN, SMQ020, SMQ040)
+}
+
+for (i in 1:length(SMQ)){
+  for (j in 1:nrow(SMQ[[i]])){
+    if (!is.na(SMQ[[i]]$SMQ020[j])){
+      if (SMQ[[i]]$SMQ020[j] == 2) {
+              SMQ[[i]][j,'SMQ040'] = 0
+      } 
+    }
+  }
+}
+
+```
+
+```{r}
+# Read in data on mental health
+DPQ_list <- list.files(pattern="DPQ_*")
+DPQ <- list()
+DPQ[[1]] <- read_xpt(DPQ_list[[1]])
+DPQ[[2]] <- read_xpt(DPQ_list[[2]])
+DPQ[[3]] <- read_xpt(DPQ_list[[3]])
+DPQ[[4]] <- read_xpt(DPQ_list[[4]])
+DPQ[[5]] <- read_xpt(DPQ_list[[5]])
+DPQ[[6]] <- read_xpt(DPQ_list[[6]])
+
+for (i in 1:length(DPQ)){
+  DPQ[[i]] <- DPQ[[i]] %>% select(SEQN, DPQ010, DPQ020, DPQ030, DPQ050,
+                                  DPQ060, DPQ090)
+}
+```
+
+```{r}
+# Read in data on weight loss
+WHQ_list <- list.files(pattern="WHQ_*")
+WHQ <- sapply(WHQ_list, read_xpt)
+
+for (i in 1:length(WHQ)){
+  if (i < 4){
+  WHQ[[i]] <- WHQ[[i]] %>% select(SEQN, WHD010, WHD020,WHQ030, WHQ040, WHD050,
+                                  WHQ060, WHQ070, WHD080E, WHD080H,WHD080I,  WHD080J, WHD080K, WHD080R) %>% mutate(WHD080U = NA)
+  } else{WHQ[[i]] <- WHQ[[i]] %>% select(SEQN, WHD010, WHD020, WHQ030, WHQ040, WHD050, WHQ060, WHQ070, WHD080E,WHD080H,  WHD080I, WHD080J, WHD080K, WHD080U, WHD080R)
+  }
+}
+
+diets = c("WHD080E", "WHD080H","WHD080I", "WHD080J", "WHD080K", "WHD080R")
+
+for (i in 1:length(WHQ)){
+  for (j in 1:nrow(WHQ[[i]])){
+    if (!is.na(WHQ[[i]]$WHQ070[j])){
+      if (WHQ[[i]]$WHQ070[j] == 2) {
+        for (k in diets){
+              WHQ[[i]][j,k] = 0
+        }
+      } else if (WHQ[[i]]$WHQ070[j] == 1){
+        for (k in diets){
+          if(is.na(WHQ[[i]][j,k])){
+            WHQ[[i]][j,k] = 0
+          }
+        }
+      }
+    }
+  }
+}
+
+
+```
+
+```{r}
+# Read in data on physical activity
+PAQ_list <- list.files(pattern="PAQ_*")
+PAQ <- sapply(PAQ_list, read_xpt)
+
+for (i in 1:length(PAQ)){
+  PAQ[[i]] <- PAQ[[i]] %>% select(SEQN, PAQ650)
+}
+```
+
+```{r}
+# Merge questionnaire data
+QUEST = list()
+for (i in 1:length(ALQ)){
+  QUEST[[i]] <- full_join(ALQ[[i]], BPQ[[i]], by="SEQN") %>%
+    full_join(CBQ[[i]], by="SEQN") %>% 
+    full_join(DIQ[[i]], by="SEQN") %>% full_join(DPQ[[i]], by="SEQN") %>%
+    full_join(DUQ[[i]], by="SEQN") %>% full_join(ECQ[[i]], by="SEQN") %>%
+    full_join(FSQ[[i]], by="SEQN") %>% full_join(HIQ[[i]], by="SEQN") %>%
+    full_join(HSQ[[i]], by="SEQN") %>% full_join(MCQ[[i]], by="SEQN") %>%
+    full_join(OHQ[[i]], by="SEQN") %>% full_join(PAQ[[i]], by="SEQN") %>%
+    full_join(SLQ[[i]], by="SEQN") %>% full_join(SMQ[[i]], by="SEQN") %>%
+    full_join(WHQ[[i]], by="SEQN")
+}
+
+
+merged_quest <- bind_rows(QUEST, .id = "origin")
+
+# Recode refused/don't know values to make them consistent
+merged_quest$ALQ111[which(merged_quest$ALQ111==7)] = 77
+merged_quest$ALQ111[which(merged_quest$ALQ111==9)] = 99
+
+merged_quest$BPQ020[which(merged_quest$BPQ020==7)] = 77
+merged_quest$BPQ020[which(merged_quest$BPQ020==9)] = 99
+
+merged_quest$HSQ510[which(merged_quest$HSQ510==7)] = 77
+merged_quest$HSQ510[which(merged_quest$HSQ510==9)] = 99
+
+merged_quest$DIQ010[which(merged_quest$DIQ010==7)] = 77
+merged_quest$DIQ010[which(merged_quest$DIQ010==9)] = 99
+
+merged_quest$DUQ200[which(merged_quest$DUQ200==7)] = 77
+merged_quest$DUQ200[which(merged_quest$DUQ200==9)] = 99
+
+merged_quest$ECD070A[which(merged_quest$ECD070A==7777)] = 77
+merged_quest$ECD070A[which(merged_quest$ECD070A==9999)] = 99
+
+merged_quest$FSD032A[which(merged_quest$FSD032A==7)] = 77
+merged_quest$FSD032A[which(merged_quest$FSD032A==9)] = 99
+merged_quest$FSD032B[which(merged_quest$FSD032B==7)] = 77
+merged_quest$FSD032B[which(merged_quest$FSD032B==9)] = 99
+merged_quest$FSD032C[which(merged_quest$FSD032C==7)] = 77
+merged_quest$FSD032C[which(merged_quest$FSD032C==9)] = 99
+merged_quest$FSD151[which(merged_quest$FSD151==7)] = 77
+merged_quest$FSD151[which(merged_quest$FSD151==9)] = 99
+merged_quest$FSQ165[which(merged_quest$FSQ165==7)] = 77
+merged_quest$FSQ165[which(merged_quest$FSQ165==9)] = 99
+
+merged_quest$HIQ011[which(merged_quest$HIQ011==7)] = 77
+merged_quest$HIQ011[which(merged_quest$HIQ011==9)] = 99
+
+merged_quest$MCQ220[which(merged_quest$MCQ220==7)] = 77
+merged_quest$MCQ220[which(merged_quest$MCQ220==9)] = 99
+
+merged_quest$OHQ845[which(merged_quest$OHQ845==7)] = 77
+merged_quest$OHQ845[which(merged_quest$OHQ845==9)] = 99
+
+merged_quest$SLQ050[which(merged_quest$SLQ050==7)] = 77
+merged_quest$SLQ050[which(merged_quest$SLQ050==9)] = 99
+
+merged_quest$SMQ020[which(merged_quest$SMQ020==7)] = 77
+merged_quest$SMQ020[which(merged_quest$SMQ020==9)] = 99
+merged_quest$SMQ040[which(merged_quest$SMQ040==7)] = 77
+merged_quest$SMQ040[which(merged_quest$SMQ040==9)] = 99
+
+merged_quest$DPQ010[which(merged_quest$DPQ010==7)] = 77
+merged_quest$DPQ010[which(merged_quest$DPQ010==9)] = 99
+merged_quest$DPQ020[which(merged_quest$DPQ020==7)] = 77
+merged_quest$DPQ020[which(merged_quest$DPQ020==9)] = 99
+merged_quest$DPQ030[which(merged_quest$DPQ030==7)] = 77
+merged_quest$DPQ030[which(merged_quest$DPQ030==9)] = 99
+merged_quest$DPQ050[which(merged_quest$DPQ050==7)] = 77
+merged_quest$DPQ050[which(merged_quest$DPQ050==9)] = 99
+merged_quest$DPQ060[which(merged_quest$DPQ060==7)] = 77
+merged_quest$DPQ060[which(merged_quest$DPQ060==9)] = 99
+merged_quest$DPQ090[which(merged_quest$DPQ090==7)] = 77
+merged_quest$DPQ090[which(merged_quest$DPQ090==9)] = 99
+
+merged_quest$WHQ030[which(merged_quest$WHQ030==7)] = 77
+merged_quest$WHQ030[which(merged_quest$WHQ030==9)] = 99
+merged_quest$WHQ040[which(merged_quest$WHQ040==7)] = 77
+merged_quest$WHQ040[which(merged_quest$WHQ040==9)] = 99
+merged_quest$WHQ060[which(merged_quest$WHQ060==7)] = 77
+merged_quest$WHQ060[which(merged_quest$WHQ060==9)] = 99
+merged_quest$WHQ070[which(merged_quest$WHQ070==7)] = 77
+merged_quest$WHQ070[which(merged_quest$WHQ070==9)] = 99
+
+merged_quest$PAQ650[which(merged_quest$PAQ650==7)] = 77
+merged_quest$PAQ650[which(merged_quest$PAQ650==9)] = 99
+
+head(merged_quest)
+```
+
+#### Merging all data frames
+
+```{r}
+# Merge individual dfs by subject identifier
+master_df <- merged_demo %>% full_join(merged_diet, by="SEQN") %>%
+  full_join(merged_exam, by="SEQN") %>% full_join(merged_quest, by="SEQN") %>%
+  select(-c("origin.y", "origin.x.x", "origin.y.y"))
+
+# Handle duplicate columns due to use of multiple supplements by one individual
+df2 <- master_df %>% group_by(SEQN) %>% mutate(SUPPL = list(c(sum(DSQ128A), sum(DSQ128B),
+      sum(DSQ128C), sum(DSQ128D), sum(DSQ128E), sum(DSQ128F), sum(DSQ128G),
+      sum(DSQ128H),sum(DSQ128I),sum(DSQ128J),sum(DSQ128K),sum(DSQ128L),sum(DSQ128M),
+      sum(DSQ128N),sum(DSQ128O),sum(DSQ128P),sum(DSQ128Q),sum(DSQ128R),sum(DSQ128S),
+      sum(DSD128T),sum(DSD128U),sum(DSD128V),sum(DSD128W),sum(DSD128X),sum(DSD128Y),
+      sum(DSD128Z),sum(DSD128AA),sum(DSD128BB),sum(DSD128CC),sum(DSD128DD),sum(DSD128EE),
+      sum(DSD128FF),sum(DSD128GG),sum(DSD128HH),sum(DSD128II),sum(DSD128JJ)))) %>% 
+  mutate(SUPPL_reason = list(c(DSQ124))) %>% ungroup()
+
+
+df_unique <- df2[match(unique(df2$SEQN), df2$SEQN),]
+suppl = c("DSQ128A", "DSQ128B","DSQ128C", "DSQ128D", "DSQ128E", "DSQ128F", "DSQ128G", "DSQ128H","DSQ128I",
+          "DSQ128J","DSQ128K","DSQ128L","DSQ128M", "DSQ128N","DSQ128O","DSQ128P","DSQ128Q","DSQ128R","DSQ128S",
+"DSD128T","DSD128U","DSD128V","DSD128W","DSD128X","DSD128Y", "DSD128Z","DSD128AA","DSD128BB","DSD128CC",
+"DSD128DD","DSD128EE", "DSD128FF","DSD128GG","DSD128HH","DSD128II","DSD128JJ")
+
+
+for (i in 1: nrow(df_unique)){
+  for (k in suppl){
+    index = match(k, suppl)
+    df_unique[i,k] = df_unique$SUPPL[[i]][index]
+  }
+}
+
+df_unique <- df_unique %>% select(-SUPPL)
+
+df = df_unique[,!(names(df_unique) %in% "SUPPL")]
+save(df, file='masterDF.Rda')
+```
+
+
+
