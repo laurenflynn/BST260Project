@@ -4,7 +4,7 @@ This repository contains files for the BST 260 final project by Lauren Flynn, An
 #### Main files
 - BST260_final.Rmd: R Markdown file containing an overview of project background and motivation, all main analyses (code and figures) and a discussion of our findings.
 - BST260_final.html: BST260_final.Rmd knitted to html
-- AppendixA.Rmd: Code for merging NHANES data for 2007 - 2018 and re-coding variables of interest; all xpt files were obtained from the [CDC website for the NHANES survey](https://www.cdc.gov/nchs/nhanes/about_nhanes.htm) and are not included as part of this repository. The output is 'masterDF.Rda', which is included in the Data folder.
+- AppendixA.Rmd: Code for merging NHANES data for 2007 - 2018 and re-coding variables of interest; all xpt files were obtained from the [CDC website for NHANES](https://www.cdc.gov/nchs/nhanes/about_nhanes.htm) and are not included as part of this repository. The output is 'masterDF.Rda', which is included in the Data folder.
 - AppendixA.html: AppendixA.Rmd knitted to html
 - AppendixB.Rmd: Code for creating graphs of NHANES data for exploratory data analysis (in addition to analyses performed in BST260_final) and assessing missingness for covariates of interest
 - AppendixB.html: AppendixB.Rmd knitted to kntml
@@ -15,7 +15,7 @@ This repository contains files for the BST 260 final project by Lauren Flynn, An
 
 #### Data
 - GlobalMortalityData2014.csv: Global country-specific mortality due to eating disorders in 2014; based on [data published by the WHO](https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Fwww.who.int%2Fhealthinfo%2Fglobal_burden_disease%2FGHE_Deaths_2012_country.xls%3Fua%3D1&wdOrigin=BROWSELINK) 
-- masterDF.Rda: R data object containing combined NHANES data for 2007 - 2018; required for all data analyses using NHANES data. The data was originally accessed through the [CDC website for the NHANES survey](https://www.cdc.gov/nchs/nhanes/about_nhanes.htm). 
+- masterDF.Rda: R data object containing combined NHANES data for 2007 - 2018; required for all data analyses using NHANES data. The data was originally accessed through the [CDC website for NHANES](https://www.cdc.gov/nchs/nhanes/about_nhanes.htm). 
 
 #### ShinyApp
 - app.R: code for the Shiny app. In order to download this app, please download the data file filtered_for_shiny.Rda. The app is also available online at https://laurenflynn.shinyapps.io/project/
