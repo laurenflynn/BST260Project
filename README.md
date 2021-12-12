@@ -23,3 +23,7 @@ This repository contains files for the BST 260 final project by Lauren Flynn, An
 - filtered_for_shiny.Rda: NHANES data which has been filtered to include the variables necessary for the Shiny app (app.R). 
 
 -filtering_for_shiny.Rmd selects variables of interest and filters out missing values in order to create filtered_for_shiny.Rda
+
+
+#### Video
+Our video is available at https://youtu.be/TFpKMJgDkFU
